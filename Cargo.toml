@@ -1,0 +1,13 @@
+[package]
+name = "uwhat"
+version = "0.1.0"
+edition = "2024"
+description = "Human-friendly USB device lister"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/sniner/uwhat"
+keywords = ["usb", "lsusb", "hardware", "cli"]
+categories = ["command-line-utilities", "hardware-support"]
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+owo-colors = "4"
