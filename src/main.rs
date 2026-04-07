@@ -3,6 +3,7 @@ compile_error!("uwhat requires Linux (sysfs)");
 
 mod device;
 mod display;
+mod json;
 mod sysfs;
 mod topology;
 mod usb_class;
@@ -20,6 +21,10 @@ struct Cli {
     /// Show flat list instead of tree
     #[arg(short, long)]
     list: bool,
+
+    /// Output as JSON (includes full details)
+    #[arg(short, long)]
+    json: bool,
 
     /// Increase verbosity (-v, -vv)
     #[arg(short, long, action = ArgAction::Count)]
@@ -72,7 +77,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Sort by bus, then devpath
         devices.sort_by(|a, b| a.bus.cmp(&b.bus).then(a.devpath.cmp(&b.devpath)));
 
-        display::print_list(&devices, cli.verbose);
+        if cli.json {
+            json::print_list_json(&devices);
+        } else {
+            display::print_list(&devices, cli.verbose);
+        }
     } else {
         // Build physical topology (merges companion buses)
         let mut controllers = topology::build_physical_topology(&devices);
@@ -88,7 +97,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             controllers.retain(|c| !c.children.is_empty());
         }
 
-        display::print_tree(&controllers, cli.verbose);
+        if cli.json {
+            json::print_tree_json(&controllers);
+        } else {
+            display::print_tree(&controllers, cli.verbose);
+        }
     }
 
     Ok(())

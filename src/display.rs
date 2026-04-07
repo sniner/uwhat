@@ -178,18 +178,6 @@ pub fn print_tree(controllers: &[PhysicalController], verbose: u8) {
     }
 }
 
-fn unique_drivers(dev: &UsbDevice) -> Vec<&str> {
-    let mut unique = Vec::new();
-    for iface in &dev.interfaces {
-        if let Some(ref drv) = iface.driver {
-            if drv != "hub" && !unique.contains(&drv.as_str()) {
-                unique.push(drv.as_str());
-            }
-        }
-    }
-    unique
-}
-
 fn print_physical_children(
     out: &mut impl Write,
     children: &[PhysicalDevice],
@@ -213,7 +201,7 @@ fn print_physical_children(
         let name = dev.display_name();
         let speed = usb_class::speed_short(dev.speed);
 
-        let drivers = unique_drivers(dev);
+        let drivers = dev.unique_drivers();
         let driver_str = if drivers.is_empty() {
             String::new()
         } else {
@@ -240,18 +228,21 @@ fn print_physical_children(
             )
             .ok();
             if !speed_warning.is_empty() {
-                write!(out, " {}", speed_warning.yellow()).ok();
+                write!(out, "{}", speed_warning.yellow()).ok();
             }
             if !driver_str.is_empty() {
-                write!(out, " {}", driver_str.blue()).ok();
+                write!(out, "{}", driver_str.blue()).ok();
             }
         } else {
             write!(
                 out,
-                "{}{}Port {:2}: {} {} {}{}{}",
-                prefix, connector, port, id, name, speed, speed_warning, driver_str,
+                "{}{}Port {:2}:  {}  {}  {}{}",
+                prefix, connector, port, id, name, speed, speed_warning,
             )
             .ok();
+            if !driver_str.is_empty() {
+                write!(out, " {}", driver_str).ok();
+            }
         }
 
         if verbose >= 1 {

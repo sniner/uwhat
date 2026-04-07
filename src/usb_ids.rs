@@ -18,10 +18,10 @@ impl UsbIds {
     /// Load the USB ID database from the system. Returns an empty database on failure.
     pub fn load() -> Self {
         for path in USB_IDS_PATHS {
-            if Path::new(path).exists() {
-                if let Ok(content) = fs::read_to_string(path) {
-                    return Self::parse(&content);
-                }
+            if Path::new(path).exists()
+                && let Ok(content) = fs::read_to_string(path)
+            {
+                return Self::parse(&content);
             }
         }
         Self {
@@ -50,12 +50,12 @@ impl UsbIds {
                 // Product line: \tPPPP  product_name
                 if let Some(vid) = current_vendor {
                     let trimmed = line.trim_start();
-                    if trimmed.len() >= 6 {
-                        if let Ok(pid) = u16::from_str_radix(&trimmed[..4], 16) {
-                            let name = trimmed[4..].trim().to_string();
-                            if !name.is_empty() {
-                                products.insert((vid, pid), name);
-                            }
+                    if trimmed.len() >= 6
+                        && let Ok(pid) = u16::from_str_radix(&trimmed[..4], 16)
+                    {
+                        let name = trimmed[4..].trim().to_string();
+                        if !name.is_empty() {
+                            products.insert((vid, pid), name);
                         }
                     }
                 }

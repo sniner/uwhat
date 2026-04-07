@@ -74,6 +74,7 @@ uwhat [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `-l`, `--list` | Show flat list instead of tree |
+| `-j`, `--json` | Output as JSON (always includes full details) |
 | `-v` | Show speed, USB version, power, interfaces |
 | `-vv` | Show full details (class codes, serial, endpoints) |
 | `-d`, `--device VEND:PROD` | Filter by vendor:product ID (hex, e.g. `046d:c52b`) |
@@ -100,6 +101,16 @@ $ uwhat -d 046d:c52b
 Bus 006/005  xHCI Host Controller  10 Gbps
 └── Port  2: 05e3:0625 GenesysLogic USB3.2 Hub 10 Gbps
     └── Port  1: 046d:c52b Logitech USB Receiver 12 Mbps (of 10 Gbps) [usbhid]
+```
+
+JSON output for scripting (hierarchical tree by default, flat with `-l`):
+```
+$ uwhat --json | jq '.[].devices[] | select(.speed_limited) | {name, speed, port_max_speed}'
+{
+  "name": "Kingston SNA-DC/U",
+  "speed": "480 Mbps",
+  "port_max_speed": "20 Gbps"
+}
 ```
 
 ## Installation

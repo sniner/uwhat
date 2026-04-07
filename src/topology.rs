@@ -106,10 +106,7 @@ pub fn build_physical_topology(devices: &[UsbDevice]) -> Vec<PhysicalController<
                 max_speed
             };
 
-            // The port could support up to the parent's speed,
-            // but also check if this devpath exists on a higher-speed bus
-            let bus_max = *devpath_max_speed.get(devpath).unwrap_or(&0.0);
-            port_max_speeds.insert(devpath, parent_speed.min(bus_max.max(parent_speed)));
+            port_max_speeds.insert(devpath, parent_speed);
         }
 
         // Build the physical device tree

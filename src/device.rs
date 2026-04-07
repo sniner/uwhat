@@ -73,6 +73,20 @@ impl UsbDevice {
         format!("{:04x}:{:04x}", self.vendor_id, self.product_id)
     }
 
+    /// Unique driver names bound to this device (excluding "hub").
+    pub fn unique_drivers(&self) -> Vec<&str> {
+        let mut unique = Vec::new();
+        for iface in &self.interfaces {
+            if let Some(ref drv) = iface.driver
+                && drv != "hub"
+                && !unique.contains(&drv.as_str())
+            {
+                unique.push(drv.as_str());
+            }
+        }
+        unique
+    }
+
     /// The last port number from the devpath (for tree display).
     pub fn port_number(&self) -> Option<u16> {
         if self.is_root_hub() {
