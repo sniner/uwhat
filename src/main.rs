@@ -15,7 +15,7 @@ use clap::{ArgAction, Parser};
 #[command(name = "uwhat", version, about = "Human-friendly USB device lister")]
 struct Cli {
     /// Show device tree (default)
-    #[arg(short, long)]
+    #[arg(short, long, conflicts_with = "list")]
     tree: bool,
 
     /// Show flat list instead of tree

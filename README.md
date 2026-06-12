@@ -73,6 +73,7 @@ uwhat [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
+| `-t`, `--tree` | Show device tree (the default) |
 | `-l`, `--list` | Show flat list instead of tree |
 | `-j`, `--json` | Output as JSON (always includes full details) |
 | `-v` | Show speed, USB version, power, interfaces |
