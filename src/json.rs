@@ -1,3 +1,5 @@
+use std::io::{self, Write};
+
 use serde_json::{Value, json};
 
 use crate::device::{UsbDevice, UsbInterface};
@@ -7,13 +9,21 @@ use crate::usb_class;
 /// Print the physical device tree as JSON.
 pub fn print_tree_json(controllers: &[PhysicalController]) {
     let arr: Vec<Value> = controllers.iter().map(controller_to_json).collect();
-    println!("{}", serde_json::to_string_pretty(&arr).unwrap());
+    print_json(&arr);
 }
 
 /// Print a flat device list as JSON.
 pub fn print_list_json(devices: &[UsbDevice]) {
     let arr: Vec<Value> = devices.iter().map(device_to_json).collect();
-    println!("{}", serde_json::to_string_pretty(&arr).unwrap());
+    print_json(&arr);
+}
+
+/// Write pretty JSON, ignoring write errors (EPIPE) like the text output does.
+fn print_json(value: &[Value]) {
+    let mut out = io::stdout().lock();
+    if let Ok(s) = serde_json::to_string_pretty(value) {
+        writeln!(out, "{s}").ok();
+    }
 }
 
 fn controller_to_json(ctrl: &PhysicalController) -> Value {
