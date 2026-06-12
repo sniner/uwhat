@@ -68,8 +68,13 @@ run faster.
 ## Usage
 
 ```
-uwhat [OPTIONS]
+uwhat [OPTIONS] [QUERY]
 ```
+
+`QUERY` filters devices by case-insensitive substring match against product
+name, manufacturer, and kernel driver — `uwhat mouse`, `uwhat logitech`,
+`uwhat uvcvideo`. If it looks like a `vendor:product` ID (`uwhat 046d:c52b`),
+it filters by ID instead.
 
 | Option | Description |
 |--------|-------------|
@@ -95,6 +100,15 @@ $ uwhat -lv
 Bus 005 Dev 003: 046d:c52b Logitech USB Receiver [Keyboard]
   Full Speed (12 Mbps), USB 2.00, 98mA
   Interfaces: usbhid (Keyboard), usbhid (Mouse), usbhid (HID)
+```
+
+Find a device by name:
+```
+$ uwhat mouse
+Bus 008/007  xHCI Host Controller  10 Gbps
+└── Port  1:  0424:7206  Microchip USB7206 Smart Hub  10 Gbps
+    └── Port  1:  05e3:0625  GenesysLogic USB3.2 Hub  10 Gbps
+        └── Port  1:  2717:5013  MI Mi Wireless Mouse  12 Mbps (of 10 Gbps)  [usbhid]
 ```
 
 Find a specific device in the tree:

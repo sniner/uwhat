@@ -94,4 +94,83 @@ impl UsbDevice {
         }
         self.devpath.rsplit('.').next().and_then(|s| s.parse().ok())
     }
+
+    /// Case-insensitive substring match against names and bound drivers.
+    /// `query` must already be lowercase.
+    pub fn matches_text(&self, query: &str) -> bool {
+        let names = [
+            self.manufacturer.as_deref(),
+            self.product.as_deref(),
+            self.vendor_name.as_deref(),
+            self.product_name.as_deref(),
+        ];
+        names
+            .iter()
+            .flatten()
+            .any(|s| s.to_lowercase().contains(query))
+            || self
+                .interfaces
+                .iter()
+                .filter_map(|i| i.driver.as_deref())
+                .any(|d| d.to_lowercase().contains(query))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_device() -> UsbDevice {
+        UsbDevice {
+            sysfs_name: "1-2".to_string(),
+            bus: 1,
+            devnum: 2,
+            devpath: "2".to_string(),
+            vendor_id: 0x046d,
+            product_id: 0xc52b,
+            manufacturer: Some("Logitech".to_string()),
+            product: Some("USB Receiver".to_string()),
+            vendor_name: Some("Logitech, Inc.".to_string()),
+            product_name: Some("Unifying Receiver".to_string()),
+            serial: None,
+            speed: 12.0,
+            usb_version: "2.00".to_string(),
+            device_class: 0,
+            device_subclass: 0,
+            device_protocol: 0,
+            max_power: None,
+            num_interfaces: 1,
+            removable: None,
+            max_children: None,
+            interfaces: vec![UsbInterface {
+                number: 0,
+                class: 0x03,
+                subclass: 0x01,
+                protocol: 0x02,
+                num_endpoints: 1,
+                driver: Some("usbhid".to_string()),
+            }],
+            pci_slot: None,
+        }
+    }
+
+    #[test]
+    fn matches_text_searches_all_name_fields() {
+        let dev = test_device();
+        assert!(dev.matches_text("logitech"));
+        assert!(dev.matches_text("receiver"));
+        assert!(dev.matches_text("unifying"));
+    }
+
+    #[test]
+    fn matches_text_searches_drivers() {
+        let dev = test_device();
+        assert!(dev.matches_text("usbhid"));
+    }
+
+    #[test]
+    fn matches_text_rejects_non_matches() {
+        let dev = test_device();
+        assert!(!dev.matches_text("webcam"));
+    }
 }

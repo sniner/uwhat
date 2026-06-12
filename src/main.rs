@@ -16,6 +16,10 @@ use clap::{ArgAction, Parser, ValueEnum};
 #[derive(Parser)]
 #[command(name = "uwhat", version, about = "Human-friendly USB device lister")]
 struct Cli {
+    /// Show only matching devices: case-insensitive name/driver search,
+    /// or a vendor:product ID like 046d:c52b
+    query: Option<String>,
+
     /// Show device tree (default)
     #[arg(short, long, conflicts_with = "list")]
     tree: bool,
@@ -89,19 +93,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    let filtering = device_filter.is_some() || cli.bus.is_some();
+    // A free-form query filters by name unless it looks like a vendor:product ID
+    let query = cli.query.as_deref().map(Query::parse);
+
+    let device_pred = |d: &device::UsbDevice| {
+        device_filter.is_none_or(|f| f.matches(d)) && query.as_ref().is_none_or(|q| q.matches(d))
+    };
+    let device_filtering = device_filter.is_some() || query.is_some();
+    let filtering = device_filtering || cli.bus.is_some();
 
     if cli.list {
         // Apply filters
-        if let Some(id_filter) = device_filter {
-            devices.retain(|d| id_filter.matches(d));
-        }
+        devices.retain(|d| device_pred(d));
         if let Some(bus) = cli.bus {
             devices.retain(|d| d.bus == bus);
         }
 
         // Hide root hubs in list mode unless filtering
-        if cli.bus.is_none() && cli.device.is_none() {
+        if !filtering {
             devices.retain(|d| !d.is_root_hub());
         }
 
@@ -125,9 +134,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(bus) = cli.bus {
             controllers.retain(|c| c.root_hubs.iter().any(|r| r.bus == bus));
         }
-        if let Some(id_filter) = device_filter {
+        if device_filtering {
             for ctrl in &mut controllers {
-                filter_physical_tree(&mut ctrl.children, id_filter);
+                filter_physical_tree(&mut ctrl.children, &device_pred);
             }
             controllers.retain(|c| !c.children.is_empty());
         }
@@ -184,11 +193,33 @@ fn parse_device_filter(s: &str) -> Option<IdFilter> {
     Some(IdFilter { vendor, product })
 }
 
+/// A free-form query: a `vendor:product` ID if it parses as one, otherwise a name search.
+enum Query {
+    Id(IdFilter),
+    Name(String),
+}
+
+impl Query {
+    fn parse(s: &str) -> Self {
+        parse_device_filter(s).map_or_else(|| Self::Name(s.to_lowercase()), Self::Id)
+    }
+
+    fn matches(&self, dev: &device::UsbDevice) -> bool {
+        match self {
+            Self::Id(filter) => filter.matches(dev),
+            Self::Name(query) => dev.matches_text(query),
+        }
+    }
+}
+
 /// Recursively filter physical device tree to only include branches containing matching devices.
-fn filter_physical_tree(children: &mut Vec<topology::PhysicalDevice>, filter: IdFilter) {
+fn filter_physical_tree(
+    children: &mut Vec<topology::PhysicalDevice>,
+    pred: &impl Fn(&device::UsbDevice) -> bool,
+) {
     children.retain_mut(|pdev| {
-        filter_physical_tree(&mut pdev.children, filter);
-        filter.matches(pdev.device) || !pdev.children.is_empty()
+        filter_physical_tree(&mut pdev.children, pred);
+        pred(pdev.device) || !pdev.children.is_empty()
     });
 }
 
@@ -222,6 +253,23 @@ mod tests {
         let f = parse_device_filter(":c52b").unwrap();
         assert_eq!(f.vendor, None);
         assert_eq!(f.product, Some(0xc52b));
+    }
+
+    #[test]
+    fn query_parses_id_syntax_as_id_filter() {
+        assert!(matches!(Query::parse("046d:c52b"), Query::Id(_)));
+        assert!(matches!(Query::parse("046d:"), Query::Id(_)));
+        assert!(matches!(Query::parse(":c52b"), Query::Id(_)));
+    }
+
+    #[test]
+    fn query_falls_back_to_lowercased_name_search() {
+        let Query::Name(q) = Query::parse("Mouse") else {
+            panic!("expected name query");
+        };
+        assert_eq!(q, "mouse");
+        // A colon alone is not a valid ID filter, so it is a name search
+        assert!(matches!(Query::parse(":"), Query::Name(_)));
     }
 
     #[test]
