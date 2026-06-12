@@ -96,8 +96,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             devices.retain(|d| d.bus == bus);
         }
 
-        // Hide root hubs in list mode unless filtering
-        if !filtering {
+        // Hide root hubs in list mode; an explicit device filter or query
+        // can still match them (e.g. 'uwhat xhci -l'), but a bare --bus
+        // no longer makes them pop up unexpectedly
+        if !device_filtering {
             devices.retain(|d| !d.is_root_hub());
         }
 
