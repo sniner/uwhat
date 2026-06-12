@@ -11,7 +11,8 @@ mod usb_ids;
 
 use std::io::IsTerminal;
 
-use clap::{ArgAction, Parser, ValueEnum};
+use clap::{ArgAction, CommandFactory, Parser, ValueEnum};
+use clap_complete::Shell;
 
 #[derive(Parser)]
 #[command(name = "uwhat", version, about = "Human-friendly USB device lister")]
@@ -48,6 +49,10 @@ struct Cli {
     /// When to use colored output
     #[arg(long, value_enum, default_value_t = ColorMode::Auto)]
     color: ColorMode,
+
+    /// Print shell completions and exit
+    #[arg(long, value_enum, value_name = "SHELL")]
+    completions: Option<Shell>,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -75,6 +80,11 @@ impl ColorMode {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+
+    if let Some(shell) = cli.completions {
+        clap_complete::generate(shell, &mut Cli::command(), "uwhat", &mut std::io::stdout());
+        return Ok(());
+    }
 
     let usb_ids = usb_ids::UsbIds::load();
     let sysfs::Scan { mut devices, peers } = sysfs::scan_devices(&usb_ids)?;

@@ -89,6 +89,7 @@ it filters by ID instead.
 | `-d`, `--device VEND:PROD` | Filter by vendor:product ID (hex); either side may be empty, e.g. `046d:c52b`, `046d:` (all Logitech), `:c52b` |
 | `-b`, `--bus N` | Filter by bus number. In tree mode this selects the whole physical controller the bus belongs to — companion-bus devices included, since the tree shows physical reality, not kernel bus boundaries. The list filters by exact bus |
 | `--color WHEN` | Colored output: `auto` (default), `always`, `never`; `auto` honors [`NO_COLOR`](https://no-color.org/) |
+| `--completions SHELL` | Print completions for `bash`, `zsh`, `fish`, `elvish`, or `powershell` (e.g. `uwhat --completions fish > ~/.config/fish/completions/uwhat.fish`) |
 
 ### Examples
 
