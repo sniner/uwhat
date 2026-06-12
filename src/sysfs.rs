@@ -22,8 +22,8 @@ pub fn scan_devices(usb_ids: &UsbIds) -> Result<Scan, Box<dyn std::error::Error>
     let mut peers = HashMap::new();
 
     let entries = fs::read_dir(SYSFS_USB_DEVICES)?;
-    for entry in entries {
-        let entry = entry?;
+    // Skip unreadable entries instead of failing the whole scan
+    for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
 
         // Skip interface entries (contain ':')
