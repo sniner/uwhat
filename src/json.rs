@@ -41,34 +41,12 @@ fn controller_to_json(ctrl: &PhysicalController) -> Value {
 }
 
 fn physical_device_to_json(pdev: &PhysicalDevice) -> Value {
-    let dev = pdev.device;
-    let drivers = dev.unique_drivers();
-
-    let mut obj = json!({
-        "port": dev.port_number(),
-        "bus": dev.bus,
-        "devnum": dev.devnum,
-        "devpath": dev.devpath,
-        "vendor_id": format!("{:04x}", dev.vendor_id),
-        "product_id": format!("{:04x}", dev.product_id),
-        "name": dev.display_name(),
-        "manufacturer": dev.manufacturer,
-        "product": dev.product,
-        "serial": dev.serial,
-        "speed_mbps": dev.speed,
-        "speed": usb_class::speed_short(dev.speed),
-        "port_max_speed_mbps": pdev.port_max_speed,
-        "port_max_speed": usb_class::speed_short(pdev.port_max_speed),
-        "speed_limited": pdev.speed_limited,
-        "usb_version": dev.usb_version,
-        "class": format!("{:02x}:{:02x}:{:02x}", dev.device_class, dev.device_subclass, dev.device_protocol),
-        "class_name": usb_class::class_name(dev.device_class),
-        "max_power": dev.max_power,
-        "removable": dev.removable,
-        "max_children": dev.max_children,
-        "interfaces": dev.interfaces.iter().map(interface_to_json).collect::<Vec<_>>(),
-        "drivers": drivers,
-    });
+    // Common device fields plus the tree-only port information
+    let mut obj = device_to_json(pdev.device);
+    obj["port"] = json!(pdev.device.port_number());
+    obj["port_max_speed_mbps"] = json!(pdev.port_max_speed);
+    obj["port_max_speed"] = json!(usb_class::speed_short(pdev.port_max_speed));
+    obj["speed_limited"] = json!(pdev.speed_limited);
 
     if !pdev.children.is_empty() {
         obj["devices"] = json!(
