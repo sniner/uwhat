@@ -216,12 +216,24 @@ fn read_driver(path: &Path) -> Option<String> {
 
 fn read_attr(path: &Path, name: &str) -> Option<String> {
     let content = fs::read_to_string(path.join(name)).ok()?;
-    let trimmed = content.trim().to_string();
-    if trimmed.is_empty() {
+    let cleaned = sanitize(&content);
+    if cleaned.is_empty() {
         None
     } else {
-        Some(trimmed)
+        Some(cleaned)
     }
+}
+
+/// Strip control characters and surrounding whitespace. Descriptor strings
+/// come from the device itself; a malicious one could otherwise inject
+/// terminal escape sequences into our output.
+fn sanitize(content: &str) -> String {
+    content
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect::<String>()
+        .trim()
+        .to_string()
 }
 
 fn read_hex(path: &Path, name: &str) -> Option<u16> {
@@ -237,4 +249,32 @@ fn read_hex_u8(path: &Path, name: &str) -> Option<u8> {
 fn read_decimal<T: std::str::FromStr>(path: &Path, name: &str) -> Option<T> {
     let s = read_attr(path, name)?;
     s.parse().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_strips_escape_sequences() {
+        assert_eq!(
+            sanitize("Evil\x1b]0;pwned\x07Device\n"),
+            "Evil]0;pwnedDevice"
+        );
+        assert_eq!(sanitize("  USB Receiver \n"), "USB Receiver");
+        assert_eq!(sanitize("\x1b[2J\x1b[H"), "[2J[H");
+    }
+
+    #[test]
+    fn parent_port_name_variants() {
+        assert_eq!(
+            parent_port_name("2-3.1", 2, "3.1").as_deref(),
+            Some("2-3-port1")
+        );
+        assert_eq!(
+            parent_port_name("2-4", 2, "4").as_deref(),
+            Some("usb2-port4")
+        );
+        assert_eq!(parent_port_name("usb2", 2, "0"), None);
+    }
 }
