@@ -9,7 +9,9 @@ mod topology;
 mod usb_class;
 mod usb_ids;
 
-use clap::{ArgAction, Parser};
+use std::io::IsTerminal;
+
+use clap::{ArgAction, Parser, ValueEnum};
 
 #[derive(Parser)]
 #[command(name = "uwhat", version, about = "Human-friendly USB device lister")]
@@ -37,6 +39,33 @@ struct Cli {
     /// Filter by bus number
     #[arg(short, long)]
     bus: Option<u8>,
+
+    /// When to use colored output
+    #[arg(long, value_enum, default_value_t = ColorMode::Auto)]
+    color: ColorMode,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+// Doc comments double as clap help text, where backticks would show up literally.
+#[allow(clippy::doc_markdown)]
+enum ColorMode {
+    /// Color when stdout is a terminal and NO_COLOR is not set
+    Auto,
+    Always,
+    Never,
+}
+
+impl ColorMode {
+    fn use_color(self) -> bool {
+        match self {
+            Self::Always => true,
+            Self::Never => false,
+            Self::Auto => {
+                let no_color = std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty());
+                !no_color && std::io::stdout().is_terminal()
+            }
+        }
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -82,7 +111,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if cli.json {
             json::print_list_json(&devices);
         } else {
-            display::print_list(&devices, cli.verbose);
+            display::print_list(&devices, cli.verbose, cli.color.use_color());
         }
 
         if filtering && devices.is_empty() {
@@ -106,7 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if cli.json {
             json::print_tree_json(&controllers);
         } else {
-            display::print_tree(&controllers, cli.verbose);
+            display::print_tree(&controllers, cli.verbose, cli.color.use_color());
         }
 
         if filtering && controllers.is_empty() {

@@ -80,6 +80,7 @@ uwhat [OPTIONS]
 | `-vv` | Show full details (class codes, serial, endpoints) |
 | `-d`, `--device VEND:PROD` | Filter by vendor:product ID (hex); either side may be empty, e.g. `046d:c52b`, `046d:` (all Logitech), `:c52b` |
 | `-b`, `--bus N` | Filter by bus number |
+| `--color WHEN` | Colored output: `auto` (default), `always`, `never`; `auto` honors [`NO_COLOR`](https://no-color.org/) |
 
 ### Examples
 

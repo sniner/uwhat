@@ -1,4 +1,4 @@
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, Write};
 
 use owo_colors::OwoColorize;
 
@@ -7,8 +7,7 @@ use crate::topology::{PhysicalController, PhysicalDevice};
 use crate::usb_class;
 
 /// Print devices in list format.
-pub fn print_list(devices: &[UsbDevice], verbose: u8) {
-    let use_color = io::stdout().is_terminal();
+pub fn print_list(devices: &[UsbDevice], verbose: u8, use_color: bool) {
     let mut out = io::stdout().lock();
 
     for dev in devices {
@@ -161,8 +160,7 @@ fn effective_class_label(dev: &UsbDevice) -> Option<&'static str> {
 // --- Tree display ---
 
 /// Print the physical device tree (companion buses merged).
-pub fn print_tree(controllers: &[PhysicalController], verbose: u8) {
-    let use_color = io::stdout().is_terminal();
+pub fn print_tree(controllers: &[PhysicalController], verbose: u8, use_color: bool) {
     let mut out = io::stdout().lock();
 
     for ctrl in controllers {
