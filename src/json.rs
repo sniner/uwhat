@@ -33,7 +33,7 @@ fn controller_to_json(ctrl: &PhysicalController) -> Value {
     json!({
         "pci_slot": ctrl.pci_slot,
         "buses": buses,
-        "name": fastest.display_name(),
+        "name": crate::display::controller_name(fastest),
         "speed_mbps": ctrl.max_speed,
         "speed": usb_class::speed_short(ctrl.max_speed),
         "devices": ctrl.children.iter().map(physical_device_to_json).collect::<Vec<_>>(),

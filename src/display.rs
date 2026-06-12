@@ -164,9 +164,9 @@ pub fn print_tree(controllers: &[PhysicalController], verbose: u8, use_color: bo
     let mut out = io::stdout().lock();
 
     for ctrl in controllers {
-        // Controller header: show PCI slot, name from fastest root hub, max speed
+        // Controller header: buses, name from fastest root hub, max speed
         let fastest = &ctrl.root_hubs[0]; // sorted by speed desc
-        let name = fastest.display_name();
+        let name = controller_name(fastest);
         let speed = usb_class::speed_short(ctrl.max_speed);
         let buses: Vec<String> = ctrl
             .root_hubs
@@ -176,15 +176,31 @@ pub fn print_tree(controllers: &[PhysicalController], verbose: u8, use_color: bo
         let bus_label = buses.join("/");
 
         if use_color {
-            writeln!(out, "Bus {}  {}  {}", bus_label, name.bold(), speed.green()).ok();
+            write!(out, "Bus {}  {}  {}", bus_label, name.bold(), speed.green()).ok();
         } else {
-            writeln!(out, "Bus {bus_label}  {name}  {speed}").ok();
+            write!(out, "Bus {bus_label}  {name}  {speed}").ok();
         }
+        if verbose >= 1
+            && let Some(ref slot) = ctrl.pci_slot
+        {
+            write!(out, "  [{slot}]").ok();
+        }
+        writeln!(out).ok();
 
         if !ctrl.children.is_empty() {
             print_physical_children(&mut out, &ctrl.children, "", verbose, use_color);
         }
     }
+}
+
+/// Header name for a controller. Root hubs carry the kernel version and
+/// driver in their manufacturer string ("Linux 6.x xhci-hcd"); the product
+/// alone ("xHCI Host Controller") is what a human wants to see.
+pub fn controller_name(root_hub: &crate::device::UsbDevice) -> String {
+    root_hub
+        .product
+        .clone()
+        .unwrap_or_else(|| root_hub.display_name())
 }
 
 fn print_physical_children(
