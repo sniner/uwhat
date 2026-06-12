@@ -30,7 +30,7 @@ struct Cli {
     #[arg(short, long, action = ArgAction::Count)]
     verbose: u8,
 
-    /// Filter by vendor:product ID (e.g. 046d:c52b)
+    /// Filter by vendor:product ID; either side may be empty (e.g. 046d:c52b, 046d:, :c52b)
     #[arg(short, long)]
     device: Option<String>,
 
@@ -51,7 +51,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(pair)
         } else {
             eprintln!(
-                "Invalid device filter '{filter}', expected format: vendor:product (e.g. 046d:c52b)"
+                "Invalid device filter '{filter}', expected format: vendor:product \
+                 with either side optional (e.g. 046d:c52b, 046d:, :c52b)"
             );
             std::process::exit(1);
         }
@@ -61,8 +62,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if cli.list {
         // Apply filters
-        if let Some((vid, pid)) = device_filter {
-            devices.retain(|d| d.vendor_id == vid && d.product_id == pid);
+        if let Some(id_filter) = device_filter {
+            devices.retain(|d| id_filter.matches(d));
         }
         if let Some(bus) = cli.bus {
             devices.retain(|d| d.bus == bus);
@@ -89,9 +90,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(bus) = cli.bus {
             controllers.retain(|c| c.root_hubs.iter().any(|r| r.bus == bus));
         }
-        if let Some((vid, pid)) = device_filter {
+        if let Some(id_filter) = device_filter {
             for ctrl in &mut controllers {
-                filter_physical_tree(&mut ctrl.children, vid, pid);
+                filter_physical_tree(&mut ctrl.children, id_filter);
             }
             controllers.retain(|c| !c.children.is_empty());
         }
@@ -106,21 +107,85 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn parse_device_filter(s: &str) -> Option<(u16, u16)> {
-    let parts: Vec<&str> = s.split(':').collect();
-    if parts.len() != 2 {
-        return None;
-    }
-    let vid = u16::from_str_radix(parts[0], 16).ok()?;
-    let pid = u16::from_str_radix(parts[1], 16).ok()?;
-    Some((vid, pid))
+/// A `vendor:product` ID filter where either side may be a wildcard.
+#[derive(Clone, Copy)]
+struct IdFilter {
+    vendor: Option<u16>,
+    product: Option<u16>,
 }
 
-/// Recursively filter physical device tree to only include branches containing the given device.
-fn filter_physical_tree(children: &mut Vec<topology::PhysicalDevice>, vid: u16, pid: u16) {
+impl IdFilter {
+    fn matches(self, dev: &device::UsbDevice) -> bool {
+        self.vendor.is_none_or(|vid| dev.vendor_id == vid)
+            && self.product.is_none_or(|pid| dev.product_id == pid)
+    }
+}
+
+fn parse_device_filter(s: &str) -> Option<IdFilter> {
+    let (vendor_part, product_part) = s.split_once(':')?;
+    let parse_side = |part: &str| -> Option<Option<u16>> {
+        if part.is_empty() {
+            Some(None)
+        } else {
+            u16::from_str_radix(part, 16).ok().map(Some)
+        }
+    };
+    let vendor = parse_side(vendor_part)?;
+    let product = parse_side(product_part)?;
+    // ":" alone would match everything — treat it as a mistake
+    if vendor.is_none() && product.is_none() {
+        return None;
+    }
+    Some(IdFilter { vendor, product })
+}
+
+/// Recursively filter physical device tree to only include branches containing matching devices.
+fn filter_physical_tree(children: &mut Vec<topology::PhysicalDevice>, filter: IdFilter) {
     children.retain_mut(|pdev| {
-        filter_physical_tree(&mut pdev.children, vid, pid);
-        let matches = pdev.device.vendor_id == vid && pdev.device.product_id == pid;
-        matches || !pdev.children.is_empty()
+        filter_physical_tree(&mut pdev.children, filter);
+        filter.matches(pdev.device) || !pdev.children.is_empty()
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn device_filter_full_pair() {
+        let f = parse_device_filter("046d:c52b").unwrap();
+        assert_eq!(f.vendor, Some(0x046d));
+        assert_eq!(f.product, Some(0xc52b));
+    }
+
+    #[test]
+    fn device_filter_accepts_uppercase() {
+        let f = parse_device_filter("046D:C52B").unwrap();
+        assert_eq!(f.vendor, Some(0x046d));
+        assert_eq!(f.product, Some(0xc52b));
+    }
+
+    #[test]
+    fn device_filter_vendor_only() {
+        let f = parse_device_filter("046d:").unwrap();
+        assert_eq!(f.vendor, Some(0x046d));
+        assert_eq!(f.product, None);
+    }
+
+    #[test]
+    fn device_filter_product_only() {
+        let f = parse_device_filter(":c52b").unwrap();
+        assert_eq!(f.vendor, None);
+        assert_eq!(f.product, Some(0xc52b));
+    }
+
+    #[test]
+    fn device_filter_rejects_invalid() {
+        assert!(parse_device_filter(":").is_none());
+        assert!(parse_device_filter("").is_none());
+        assert!(parse_device_filter("046d").is_none());
+        assert!(parse_device_filter("xx:yy").is_none());
+        assert!(parse_device_filter("046d:c52b:0").is_none());
+        assert!(parse_device_filter("12345:c52b").is_none());
+    }
 }

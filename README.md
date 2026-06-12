@@ -78,7 +78,7 @@ uwhat [OPTIONS]
 | `-j`, `--json` | Output as JSON (always includes full details) |
 | `-v` | Show speed, USB version, power, interfaces |
 | `-vv` | Show full details (class codes, serial, endpoints) |
-| `-d`, `--device VEND:PROD` | Filter by vendor:product ID (hex, e.g. `046d:c52b`) |
+| `-d`, `--device VEND:PROD` | Filter by vendor:product ID (hex); either side may be empty, e.g. `046d:c52b`, `046d:` (all Logitech), `:c52b` |
 | `-b`, `--bus N` | Filter by bus number |
 
 ### Examples
