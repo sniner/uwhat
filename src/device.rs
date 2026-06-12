@@ -34,6 +34,9 @@ pub struct UsbDevice {
     pub interfaces: Vec<UsbInterface>,
     /// PCI slot of the root hub this device belongs to (e.g. "0000:77:00.3")
     pub pci_slot: Option<String>,
+    /// sysfs name of the hub port this device is attached to
+    /// (e.g. "usb2-port4" or "2-3-port1"); None for root hubs
+    pub parent_port: Option<String>,
 }
 
 pub struct UsbInterface {
@@ -151,6 +154,7 @@ mod tests {
                 driver: Some("usbhid".to_string()),
             }],
             pci_slot: None,
+            parent_port: Some("usb1-port2".to_string()),
         }
     }
 

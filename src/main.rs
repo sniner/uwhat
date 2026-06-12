@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     let usb_ids = usb_ids::UsbIds::load();
-    let mut devices = sysfs::scan_devices(&usb_ids)?;
+    let sysfs::Scan { mut devices, peers } = sysfs::scan_devices(&usb_ids)?;
 
     // Parse device filter early so we can use it in both modes
     let device_filter = if let Some(ref filter) = cli.device {
@@ -128,7 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         // Build physical topology (merges companion buses)
-        let mut controllers = topology::build_physical_topology(&devices);
+        let mut controllers = topology::build_physical_topology(&devices, &peers);
 
         // Apply filters
         if let Some(bus) = cli.bus {

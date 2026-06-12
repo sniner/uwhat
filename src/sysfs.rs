@@ -7,9 +7,19 @@ use crate::usb_ids::UsbIds;
 
 const SYSFS_USB_DEVICES: &str = "/sys/bus/usb/devices";
 
-/// Scan all USB devices from sysfs.
-pub fn scan_devices(usb_ids: &UsbIds) -> Result<Vec<UsbDevice>, Box<dyn std::error::Error>> {
+/// Result of a sysfs scan: all devices plus the port peer map.
+pub struct Scan {
+    pub devices: Vec<UsbDevice>,
+    /// Companion port links (both directions), e.g. "usb1-port3" <-> "usb2-port3".
+    /// Peered ports are the same physical connector on the USB 2.0 and
+    /// USB 3.x side of a controller or hub.
+    pub peers: HashMap<String, String>,
+}
+
+/// Scan all USB devices and hub port peer links from sysfs.
+pub fn scan_devices(usb_ids: &UsbIds) -> Result<Scan, Box<dyn std::error::Error>> {
     let mut devices = Vec::new();
+    let mut peers = HashMap::new();
 
     let entries = fs::read_dir(SYSFS_USB_DEVICES)?;
     for entry in entries {
@@ -28,6 +38,7 @@ pub fn scan_devices(usb_ids: &UsbIds) -> Result<Vec<UsbDevice>, Box<dyn std::err
         if let Some(dev) = read_device(&path, &name, usb_ids) {
             devices.push(dev);
         }
+        scan_port_peers(&path, &mut peers);
     }
 
     // Propagate PCI slot from root hubs to all devices on that bus
@@ -41,7 +52,54 @@ pub fn scan_devices(usb_ids: &UsbIds) -> Result<Vec<UsbDevice>, Box<dyn std::err
         dev.pci_slot = pci_slots.get(&dev.bus).cloned();
     }
 
-    Ok(devices)
+    Ok(Scan { devices, peers })
+}
+
+/// Collect peer links of all hub ports below a device directory.
+/// Port directories ("<hub>-port<N>") live inside the hub's interface
+/// directory; their "peer" symlink points to the companion-bus port
+/// that shares the same physical connector.
+fn scan_port_peers(device_path: &Path, peers: &mut HashMap<String, String>) {
+    let Ok(entries) = fs::read_dir(device_path) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let iface_name = entry.file_name().to_string_lossy().to_string();
+        if !iface_name.contains(':') {
+            continue;
+        }
+        let Ok(port_entries) = fs::read_dir(entry.path()) else {
+            continue;
+        };
+        for port in port_entries.flatten() {
+            let port_name = port.file_name().to_string_lossy().to_string();
+            if !port_name.contains("-port") {
+                continue;
+            }
+            if let Ok(target) = fs::read_link(port.path().join("peer"))
+                && let Some(peer_name) = target.file_name()
+            {
+                let peer_name = peer_name.to_string_lossy().to_string();
+                peers.insert(port_name.clone(), peer_name.clone());
+                peers.insert(peer_name, port_name);
+            }
+        }
+    }
+}
+
+/// The sysfs name of the port a device hangs off: "2-3.1" sits on port 1
+/// of hub "2-3" ("2-3-port1"), top-level "2-4" on port 4 of the root hub
+/// ("usb2-port4"). Root hubs have no parent port.
+fn parent_port_name(sysfs_name: &str, bus: u8, devpath: &str) -> Option<String> {
+    if devpath == "0" {
+        return None;
+    }
+    if let Some((parent, port)) = sysfs_name.rsplit_once('.') {
+        Some(format!("{parent}-port{port}"))
+    } else {
+        let (_, port) = sysfs_name.split_once('-')?;
+        Some(format!("usb{bus}-port{port}"))
+    }
 }
 
 fn read_device(path: &Path, sysfs_name: &str, usb_ids: &UsbIds) -> Option<UsbDevice> {
@@ -72,6 +130,7 @@ fn read_device(path: &Path, sysfs_name: &str, usb_ids: &UsbIds) -> Option<UsbDev
         .map(std::string::ToString::to_string);
 
     let interfaces = read_interfaces(path, sysfs_name);
+    let parent_port = parent_port_name(sysfs_name, bus, &devpath);
 
     Some(UsbDevice {
         sysfs_name: sysfs_name.to_string(),
@@ -96,6 +155,7 @@ fn read_device(path: &Path, sysfs_name: &str, usb_ids: &UsbIds) -> Option<UsbDev
         max_children,
         interfaces,
         pci_slot: None,
+        parent_port,
     })
 }
 

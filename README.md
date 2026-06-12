@@ -18,8 +18,8 @@ $ uwhat
 Bus 002/001  xHCI Host Controller  20 Gbps
 ├── Port  3: 2109:8110 VIA Labs, Inc. USB3.0 Hub 5 Gbps
 ├── Port  4: 11b0:6298 Kingston SNA-DC/U 480 Mbps (of 20 Gbps) [usb-storage]
-├── Port  6: 0db0:0076 MSI MYSTIC LIGHT 12 Mbps (of 20 Gbps) [usbhid]
-└── Port 11: 0489:e10a Foxconn / Hon Hai 12 Mbps (of 20 Gbps) [btusb]
+├── Port  6: 0db0:0076 MSI MYSTIC LIGHT 12 Mbps [usbhid]
+└── Port 11: 0489:e10a Foxconn / Hon Hai 12 Mbps [btusb]
 Bus 006/005  xHCI Host Controller  10 Gbps
 └── Port  2: 05e3:0625 GenesysLogic USB3.2 Hub 10 Gbps
     ├── Port  1: 046d:c52b Logitech USB Receiver 12 Mbps (of 10 Gbps) [usbhid]
@@ -56,14 +56,17 @@ and USB 3.x (the additional pins). Linux exposes these as separate buses. For
 example, buses 005 and 006 might share the same PCI slot — they're the same
 physical controller.
 
-`uwhat` detects this by comparing the PCI slot of root hubs (from sysfs
-`serial` attribute) and merges companion buses into a single tree. The bus label
+`uwhat` merges them back together using the kernel's port peering information
+(sysfs `peer` links, available since Linux 3.17): two peered ports are the
+USB 2.0 and USB 3.x signal paths of the same physical connector. Buses whose
+root ports peer with each other belong to the same controller. The bus label
 `Bus 006/005` lists the faster bus first (USB 3.x), then the slower one
 (USB 2.0).
 
-When a device negotiates USB 2.0 on a port that supports USB 3.x, the speed
-annotation `(of 10 Gbps)` appears — a hint that the device could potentially
-run faster.
+When a device negotiates USB 2.0 on a port that is wired for USB 3.x, the
+speed annotation `(of 10 Gbps)` appears — a hint that the device could
+potentially run faster. Ports without USB 3.x wiring (internal USB 2.0-only
+headers, for example) never get this annotation.
 
 ## Usage
 
