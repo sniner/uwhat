@@ -60,6 +60,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
+    let filtering = device_filter.is_some() || cli.bus.is_some();
+
     if cli.list {
         // Apply filters
         if let Some(id_filter) = device_filter {
@@ -82,6 +84,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             display::print_list(&devices, cli.verbose);
         }
+
+        if filtering && devices.is_empty() {
+            no_matches();
+        }
     } else {
         // Build physical topology (merges companion buses)
         let mut controllers = topology::build_physical_topology(&devices);
@@ -102,9 +108,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             display::print_tree(&controllers, cli.verbose);
         }
+
+        if filtering && controllers.is_empty() {
+            no_matches();
+        }
     }
 
     Ok(())
+}
+
+/// Report that filters matched nothing and exit with grep-like status 1.
+fn no_matches() -> ! {
+    eprintln!("uwhat: no matching devices");
+    std::process::exit(1);
 }
 
 /// A `vendor:product` ID filter where either side may be a wildcard.
