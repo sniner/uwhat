@@ -77,12 +77,14 @@ impl UsbIds {
     }
 
     pub fn vendor_name(&self, vendor_id: u16) -> Option<&str> {
-        self.vendors.get(&vendor_id).map(|s| s.as_str())
+        self.vendors
+            .get(&vendor_id)
+            .map(std::string::String::as_str)
     }
 
     pub fn product_name(&self, vendor_id: u16, product_id: u16) -> Option<&str> {
         self.products
             .get(&(vendor_id, product_id))
-            .map(|s| s.as_str())
+            .map(std::string::String::as_str)
     }
 }

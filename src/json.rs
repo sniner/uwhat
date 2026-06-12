@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::device::{UsbDevice, UsbInterface};
 use crate::topology::{PhysicalController, PhysicalDevice};
@@ -61,7 +61,12 @@ fn physical_device_to_json(pdev: &PhysicalDevice) -> Value {
     });
 
     if !pdev.children.is_empty() {
-        obj["devices"] = json!(pdev.children.iter().map(physical_device_to_json).collect::<Vec<_>>());
+        obj["devices"] = json!(
+            pdev.children
+                .iter()
+                .map(physical_device_to_json)
+                .collect::<Vec<_>>()
+        );
     }
 
     obj
@@ -102,4 +107,3 @@ fn interface_to_json(iface: &UsbInterface) -> Value {
         "driver": iface.driver,
     })
 }
-

@@ -57,13 +57,13 @@ impl UsbDevice {
         // Prefer sysfs product, then usb.ids product name
         if let Some(ref p) = self.product {
             if let Some(ref m) = self.manufacturer {
-                return format!("{} {}", m, p);
+                return format!("{m} {p}");
             }
             return p.clone();
         }
         if let Some(ref name) = self.product_name {
             if let Some(ref vendor) = self.vendor_name {
-                return format!("{} {}", vendor, name);
+                return format!("{vendor} {name}");
             }
             return name.clone();
         }
@@ -92,10 +92,6 @@ impl UsbDevice {
         if self.is_root_hub() {
             return None;
         }
-        self.devpath
-            .rsplit('.')
-            .next()
-            .and_then(|s| s.parse().ok())
+        self.devpath.rsplit('.').next().and_then(|s| s.parse().ok())
     }
-
 }

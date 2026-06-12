@@ -51,8 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(pair)
         } else {
             eprintln!(
-                "Invalid device filter '{}', expected format: vendor:product (e.g. 046d:c52b)",
-                filter
+                "Invalid device filter '{filter}', expected format: vendor:product (e.g. 046d:c52b)"
             );
             std::process::exit(1);
         }

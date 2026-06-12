@@ -110,8 +110,7 @@ pub fn build_physical_topology(devices: &[UsbDevice]) -> Vec<PhysicalController<
         }
 
         // Build the physical device tree
-        let physical_devices =
-            build_device_tree(&by_devpath, &port_max_speeds, &devpaths, max_speed);
+        let physical_devices = build_device_tree(&by_devpath, &port_max_speeds, &devpaths);
 
         controllers.push(PhysicalController {
             pci_slot: slot.to_string(),
@@ -130,7 +129,6 @@ fn build_device_tree<'a>(
     by_devpath: &HashMap<&str, &'a UsbDevice>,
     port_max_speeds: &HashMap<&str, f64>,
     devpaths: &[&str],
-    controller_max_speed: f64,
 ) -> Vec<PhysicalDevice<'a>> {
     // Find top-level devices (no dot in devpath = direct children of root hub)
     let top_level: Vec<&str> = devpaths
@@ -139,13 +137,7 @@ fn build_device_tree<'a>(
         .copied()
         .collect();
 
-    build_children(
-        &top_level,
-        by_devpath,
-        port_max_speeds,
-        devpaths,
-        controller_max_speed,
-    )
+    build_children(&top_level, by_devpath, port_max_speeds, devpaths)
 }
 
 fn build_children<'a>(
@@ -153,7 +145,6 @@ fn build_children<'a>(
     by_devpath: &HashMap<&str, &'a UsbDevice>,
     port_max_speeds: &HashMap<&str, f64>,
     all_devpaths: &[&str],
-    _controller_max_speed: f64,
 ) -> Vec<PhysicalDevice<'a>> {
     let mut result = Vec::new();
 
@@ -166,22 +157,14 @@ fn build_children<'a>(
         let speed_limited = device.speed < port_max && port_max > 480.0 && device.speed <= 480.0;
 
         // Find children of this device
-        let prefix = format!("{}.", devpath);
+        let prefix = format!("{devpath}.");
         let child_paths: Vec<&str> = all_devpaths
             .iter()
-            .filter(|p| {
-                p.starts_with(&prefix) && !p[prefix.len()..].contains('.')
-            })
+            .filter(|p| p.starts_with(&prefix) && !p[prefix.len()..].contains('.'))
             .copied()
             .collect();
 
-        let children = build_children(
-            &child_paths,
-            by_devpath,
-            port_max_speeds,
-            all_devpaths,
-            _controller_max_speed,
-        );
+        let children = build_children(&child_paths, by_devpath, port_max_speeds, all_devpaths);
 
         result.push(PhysicalDevice {
             device,

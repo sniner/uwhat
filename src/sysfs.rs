@@ -64,10 +64,12 @@ fn read_device(path: &Path, sysfs_name: &str, usb_ids: &UsbIds) -> Option<UsbDev
     let removable = read_attr(path, "removable");
     let max_children = read_decimal::<u8>(path, "maxchild").filter(|&n| n > 0);
 
-    let vendor_name = usb_ids.vendor_name(vendor_id).map(|s| s.to_string());
+    let vendor_name = usb_ids
+        .vendor_name(vendor_id)
+        .map(std::string::ToString::to_string);
     let product_name = usb_ids
         .product_name(vendor_id, product_id)
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
 
     let interfaces = read_interfaces(path, sysfs_name);
 
@@ -102,7 +104,7 @@ fn read_interfaces(device_path: &Path, sysfs_name: &str) -> Vec<UsbInterface> {
 
     // Interface entries are in the same parent directory, named like "5-2.1:1.0"
     // But after canonicalize, they're subdirectories of the device
-    let prefix = format!("{}:", sysfs_name);
+    let prefix = format!("{sysfs_name}:");
 
     // Try reading interface dirs from the device directory itself
     let Ok(entries) = fs::read_dir(device_path) else {

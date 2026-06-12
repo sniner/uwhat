@@ -40,14 +40,19 @@ fn print_device_line(out: &mut impl Write, dev: &UsbDevice, verbose: u8, color: 
         )
         .ok();
     } else {
-        write!(out, "Bus {:03} Dev {:03}: {} {}", dev.bus, dev.devnum, id, name).ok();
+        write!(
+            out,
+            "Bus {:03} Dev {:03}: {} {}",
+            dev.bus, dev.devnum, id, name
+        )
+        .ok();
     }
 
     if let Some(label) = class_label {
         if color {
             write!(out, " [{}]", label.yellow()).ok();
         } else {
-            write!(out, " [{}]", label).ok();
+            write!(out, " [{label}]").ok();
         }
     }
 
@@ -91,9 +96,9 @@ fn print_verbose_1(out: &mut impl Write, dev: &UsbDevice, color: bool) {
                 let class = usb_class::interface_class_name(i.class, i.subclass, i.protocol);
                 match &i.driver {
                     Some(drv) if color => format!("{} ({})", drv.blue(), class),
-                    Some(drv) => format!("{} ({})", drv, class),
-                    None if color => format!("- ({})", class),
-                    None => format!("- ({})", class),
+                    Some(drv) => format!("{drv} ({class})"),
+                    None if color => format!("- ({class})"),
+                    None => format!("- ({class})"),
                 }
             })
             .collect();
@@ -113,13 +118,13 @@ fn print_verbose_2(out: &mut impl Write, dev: &UsbDevice, _color: bool) {
     )
     .ok();
     if let Some(ref serial) = dev.serial {
-        writeln!(out, "  Serial: {}", serial).ok();
+        writeln!(out, "  Serial: {serial}").ok();
     }
     if let Some(ref removable) = dev.removable {
-        writeln!(out, "  Removable: {}", removable).ok();
+        writeln!(out, "  Removable: {removable}").ok();
     }
     if let Some(children) = dev.max_children {
-        writeln!(out, "  Hub ports: {}", children).ok();
+        writeln!(out, "  Hub ports: {children}").ok();
     }
     for iface in &dev.interfaces {
         writeln!(
@@ -146,7 +151,9 @@ fn effective_class_label(dev: &UsbDevice) -> Option<&'static str> {
     if dev.interfaces.iter().all(|i| i.class == first) && first != 0x00 {
         // Use the most specific label from the first interface
         let i = &dev.interfaces[0];
-        return Some(usb_class::interface_class_name(i.class, i.subclass, i.protocol));
+        return Some(usb_class::interface_class_name(
+            i.class, i.subclass, i.protocol,
+        ));
     }
     None
 }
@@ -163,13 +170,17 @@ pub fn print_tree(controllers: &[PhysicalController], verbose: u8) {
         let fastest = &ctrl.root_hubs[0]; // sorted by speed desc
         let name = fastest.display_name();
         let speed = usb_class::speed_short(ctrl.max_speed);
-        let buses: Vec<String> = ctrl.root_hubs.iter().map(|r| format!("{:03}", r.bus)).collect();
+        let buses: Vec<String> = ctrl
+            .root_hubs
+            .iter()
+            .map(|r| format!("{:03}", r.bus))
+            .collect();
         let bus_label = buses.join("/");
 
         if use_color {
             writeln!(out, "Bus {}  {}  {}", bus_label, name.bold(), speed.green()).ok();
         } else {
-            writeln!(out, "Bus {}  {}  {}", bus_label, name, speed).ok();
+            writeln!(out, "Bus {bus_label}  {name}  {speed}").ok();
         }
 
         if !ctrl.children.is_empty() {
@@ -190,9 +201,9 @@ fn print_physical_children(
         let is_last = i == count - 1;
         let connector = if is_last { "└── " } else { "├── " };
         let child_prefix = if is_last {
-            format!("{}    ", prefix)
+            format!("{prefix}    ")
         } else {
-            format!("{}│   ", prefix)
+            format!("{prefix}│   ")
         };
 
         let dev = pdev.device;
@@ -236,29 +247,28 @@ fn print_physical_children(
         } else {
             write!(
                 out,
-                "{}{}Port {:2}:  {}  {}  {}{}",
-                prefix, connector, port, id, name, speed, speed_warning,
+                "{prefix}{connector}Port {port:2}:  {id}  {name}  {speed}{speed_warning}",
             )
             .ok();
             if !driver_str.is_empty() {
-                write!(out, " {}", driver_str).ok();
+                write!(out, " {driver_str}").ok();
             }
         }
 
         if verbose >= 1 {
             write!(out, ", USB {}", dev.usb_version).ok();
             if let Some(ref power) = dev.max_power {
-                write!(out, ", {}", power).ok();
+                write!(out, ", {power}").ok();
             }
         }
 
         writeln!(out).ok();
 
         if verbose >= 2 {
-            let detail_prefix = if !pdev.children.is_empty() {
-                format!("{}│   ", child_prefix)
+            let detail_prefix = if pdev.children.is_empty() {
+                format!("{child_prefix}    ")
             } else {
-                format!("{}    ", child_prefix)
+                format!("{child_prefix}│   ")
             };
             for iface in &dev.interfaces {
                 let class =
