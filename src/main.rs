@@ -37,8 +37,8 @@ struct Cli {
     verbose: u8,
 
     /// Filter by vendor:product ID; either side may be empty (e.g. 046d:c52b, 046d:, :c52b)
-    #[arg(short, long)]
-    device: Option<String>,
+    #[arg(short, long, value_parser = parse_device_filter_arg)]
+    device: Option<IdFilter>,
 
     /// Filter by bus number
     #[arg(short, long)]
@@ -78,20 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let usb_ids = usb_ids::UsbIds::load();
     let sysfs::Scan { mut devices, peers } = sysfs::scan_devices(&usb_ids)?;
 
-    // Parse device filter early so we can use it in both modes
-    let device_filter = if let Some(ref filter) = cli.device {
-        if let Some(pair) = parse_device_filter(filter) {
-            Some(pair)
-        } else {
-            eprintln!(
-                "Invalid device filter '{filter}', expected format: vendor:product \
-                 with either side optional (e.g. 046d:c52b, 046d:, :c52b)"
-            );
-            std::process::exit(1);
-        }
-    } else {
-        None
-    };
+    let device_filter = cli.device;
 
     // A free-form query filters by name unless it looks like a vendor:product ID
     let query = cli.query.as_deref().map(Query::parse);
@@ -177,6 +164,14 @@ impl IdFilter {
         self.vendor.is_none_or(|vid| dev.vendor_id == vid)
             && self.product.is_none_or(|pid| dev.product_id == pid)
     }
+}
+
+/// clap value parser for `--device`.
+fn parse_device_filter_arg(s: &str) -> Result<IdFilter, String> {
+    parse_device_filter(s).ok_or_else(|| {
+        "expected vendor:product with either side optional (e.g. 046d:c52b, 046d:, :c52b)"
+            .to_string()
+    })
 }
 
 fn parse_device_filter(s: &str) -> Option<IdFilter> {
