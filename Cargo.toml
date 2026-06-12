@@ -2,9 +2,13 @@
 name = "uwhat"
 version = "0.2.0"
 edition = "2024"
+authors = ["Stefan Schönberger <stefan@sniner.dev>"]
 description = "Human-friendly USB device lister"
 license = "GPL-3.0-or-later"
+rust-version = "1.88"
 repository = "https://github.com/sniner/uwhat"
+homepage = "https://github.com/sniner/uwhat"
+readme = "README.md"
 keywords = ["usb", "lsusb", "hardware", "cli"]
 categories = ["command-line-utilities", "hardware-support"]
 
