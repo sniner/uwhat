@@ -40,7 +40,8 @@ struct Cli {
     #[arg(short, long, value_parser = parse_device_filter_arg)]
     device: Option<IdFilter>,
 
-    /// Filter by bus number
+    /// Filter by bus number; the tree shows the whole physical controller
+    /// the bus belongs to (companion buses included)
     #[arg(short, long)]
     bus: Option<u8>,
 
