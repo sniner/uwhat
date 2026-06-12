@@ -1,5 +1,4 @@
 /// A USB device as read from sysfs.
-#[allow(dead_code)]
 pub struct UsbDevice {
     /// sysfs directory name, e.g. "5-2.1" or "usb1"
     pub sysfs_name: String,
