@@ -98,6 +98,14 @@ impl UsbDevice {
         self.devpath.rsplit('.').next().and_then(|s| s.parse().ok())
     }
 
+    /// The devpath as numeric segments, for sorting ("1.10" after "1.2").
+    pub fn devpath_segments(&self) -> Vec<u16> {
+        self.devpath
+            .split('.')
+            .filter_map(|s| s.parse().ok())
+            .collect()
+    }
+
     /// Case-insensitive substring match against names and bound drivers.
     /// `query` must already be lowercase.
     pub fn matches_text(&self, query: &str) -> bool {
@@ -176,5 +184,14 @@ mod tests {
     fn matches_text_rejects_non_matches() {
         let dev = test_device();
         assert!(!dev.matches_text("webcam"));
+    }
+
+    #[test]
+    fn devpath_segments_sort_numerically() {
+        let mut a = test_device();
+        a.devpath = "1.10".to_string();
+        let mut b = test_device();
+        b.devpath = "1.2".to_string();
+        assert!(a.devpath_segments() > b.devpath_segments());
     }
 }

@@ -114,8 +114,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             devices.retain(|d| !d.is_root_hub());
         }
 
-        // Sort by bus, then devpath
-        devices.sort_by(|a, b| a.bus.cmp(&b.bus).then(a.devpath.cmp(&b.devpath)));
+        // Sort by bus, then devpath (numerically, so port 10 comes after port 2)
+        devices.sort_by(|a, b| {
+            a.bus
+                .cmp(&b.bus)
+                .then_with(|| a.devpath_segments().cmp(&b.devpath_segments()))
+        });
 
         if cli.json {
             json::print_list_json(&devices);
