@@ -20,6 +20,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   vendor, `:c52b` all devices with that product ID
 - **`--color`**: new option `auto|always|never`; `auto` (the default) honors the
   [`NO_COLOR`](https://no-color.org/) convention
+- **`--completions`**: print shell completion scripts for bash, zsh, fish, elvish, or powershell
+- **Tree header**: `-v` shows the controller's PCI slot
 
 ### Changed
 
@@ -27,6 +29,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   links, Linux 3.17+) instead of assuming that port numbers align between the USB 2.0 and
   USB 3.x bus of a controller
 - **JSON output**: `pci_slot` may now be `null` for controllers without a PCI slot
+- **Tree header** shows the controller product name ("xHCI Host Controller") instead of the
+  full manufacturer string with kernel version and driver; JSON controller `name` follows
+- **List mode**: root hubs are hidden unless a device filter or search query matches them;
+  a bare `--bus` no longer reveals them
+- **`--device`**: an invalid filter value now exits with status 2 (clap convention)
+  instead of 1
+- **Security**: control characters are stripped from device-supplied descriptor strings, so a
+  malicious device can no longer inject terminal escape sequences into the output
 
 ### Fixed
 
@@ -35,6 +45,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Tree view**: devices could be silently hidden when two different devices sat on the same
   port number of companion buses; physical ports are now identified exactly via peer links
 - **Tree view**: buses whose root hub reports no PCI slot no longer disappear from the output
+- **List mode**: devices are sorted by numeric port path, so port 1.10 follows 1.2
+- **Robustness**: a malformed usb.ids line or a single unreadable sysfs entry no longer
+  aborts the program; `uwhat --json | head` no longer risks a broken-pipe panic
 
 ## [0.1.1] - 2026
 
