@@ -48,25 +48,16 @@ impl UsbIds {
 
             if line.starts_with('\t') && !line.starts_with("\t\t") {
                 // Product line: \tPPPP  product_name
-                if let Some(vid) = current_vendor {
-                    let trimmed = line.trim_start();
-                    if trimmed.len() >= 6
-                        && let Ok(pid) = u16::from_str_radix(&trimmed[..4], 16)
-                    {
-                        let name = trimmed[4..].trim().to_string();
-                        if !name.is_empty() {
-                            products.insert((vid, pid), name);
-                        }
-                    }
+                if let Some(vid) = current_vendor
+                    && let Some((pid, name)) = parse_id_line(line.trim_start())
+                {
+                    products.insert((vid, pid), name);
                 }
-            } else if !line.starts_with('\t') && line.len() >= 6 {
+            } else if !line.starts_with('\t') {
                 // Vendor line: VVVV  vendor_name
-                if let Ok(vid) = u16::from_str_radix(&line[..4], 16) {
-                    let name = line[4..].trim().to_string();
-                    if !name.is_empty() {
-                        vendors.insert(vid, name);
-                        current_vendor = Some(vid);
-                    }
+                if let Some((vid, name)) = parse_id_line(line) {
+                    vendors.insert(vid, name);
+                    current_vendor = Some(vid);
                 } else {
                     current_vendor = None;
                 }
@@ -86,5 +77,55 @@ impl UsbIds {
         self.products
             .get(&(vendor_id, product_id))
             .map(std::string::String::as_str)
+    }
+}
+
+/// Parse an "XXXX  name" line into ID and name. Uses `get()` so lines with
+/// multi-byte characters in unexpected positions are skipped, not panicked on.
+fn parse_id_line(line: &str) -> Option<(u16, String)> {
+    let id = u16::from_str_radix(line.get(..4)?, 16).ok()?;
+    let name = line.get(4..)?.trim();
+    if name.is_empty() {
+        return None;
+    }
+    Some((id, name.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FIXTURE: &str = "\
+# usb.ids fixture
+046d  Logitech, Inc.
+\tc52b  Unifying Receiver
+\t\t01  some interface detail
+05e3  Genesys Logic, Inc.
+\t0608  Hub
+äöü malformed multibyte line
+C 03  HID
+\t01  ignored after class section
+";
+
+    #[test]
+    fn parses_vendors_and_products() {
+        let ids = UsbIds::parse(FIXTURE);
+        assert_eq!(ids.vendor_name(0x046d), Some("Logitech, Inc."));
+        assert_eq!(ids.product_name(0x046d, 0xc52b), Some("Unifying Receiver"));
+        assert_eq!(ids.vendor_name(0x05e3), Some("Genesys Logic, Inc."));
+        assert_eq!(ids.product_name(0x05e3, 0x0608), Some("Hub"));
+    }
+
+    #[test]
+    fn stops_at_class_section() {
+        let ids = UsbIds::parse(FIXTURE);
+        assert_eq!(ids.product_name(0x05e3, 0x0001), None);
+    }
+
+    #[test]
+    fn survives_multibyte_garbage() {
+        // Must not panic on non-ASCII bytes at the slice boundary
+        let ids = UsbIds::parse("é234  bad\n0123  good\n");
+        assert_eq!(ids.vendor_name(0x0123), Some("good"));
     }
 }
