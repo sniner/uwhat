@@ -2,19 +2,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::device::{UsbDevice, UsbInterface};
+use crate::device::{Scan, UsbDevice, UsbInterface};
 use crate::usb_ids::UsbIds;
 
 const SYSFS_USB_DEVICES: &str = "/sys/bus/usb/devices";
-
-/// Result of a sysfs scan: all devices plus the port peer map.
-pub struct Scan {
-    pub devices: Vec<UsbDevice>,
-    /// Companion port links (both directions), e.g. "usb1-port3" <-> "usb2-port3".
-    /// Peered ports are the same physical connector on the USB 2.0 and
-    /// USB 3.x side of a controller or hub.
-    pub peers: HashMap<String, String>,
-}
 
 /// Scan all USB devices and hub port peer links from sysfs.
 pub fn scan_devices(usb_ids: &UsbIds) -> Result<Scan, Box<dyn std::error::Error>> {

@@ -2,6 +2,16 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **macOS support**: `uwhat` now runs on macOS in addition to Linux. It reads the USB tree from
+  `system_profiler SPUSBHostDataType`; the default tree view, speed warnings, name/ID filtering
+  and `--json` all work as on Linux. Per-interface driver annotations (`[usbhid]`) and the full
+  `-vv` class-code detail are Linux-only, since macOS does not expose that data through this
+  source
+
 ## [0.2.0] - 2026-06-12
 
 ### Breaking changes
