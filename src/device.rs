@@ -1,4 +1,18 @@
-/// A USB device as read from sysfs.
+use std::collections::HashMap;
+
+/// Result of a platform backend scan: all devices plus the port peer map.
+/// This is the neutral contract both the Linux (sysfs) and macOS (`IOKit`)
+/// backends produce; everything downstream consumes it unchanged.
+pub struct Scan {
+    pub devices: Vec<UsbDevice>,
+    /// Companion port links (both directions), e.g. "usb1-port3" <-> "usb2-port3".
+    /// Peered ports are the same physical connector on the USB 2.0 and USB 3.x
+    /// side of a controller or hub. Linux-only; always empty on macOS, where
+    /// `IOKit` already presents the merged physical topology.
+    pub peers: HashMap<String, String>,
+}
+
+/// A USB device as read from a platform backend (Linux sysfs or macOS `IOKit`).
 pub struct UsbDevice {
     /// sysfs directory name, e.g. "5-2.1" or "usb1"
     pub sysfs_name: String,

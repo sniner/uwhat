@@ -1,6 +1,6 @@
 # uwhat
 
-A human-friendly USB device lister for Linux. Think of it as a modern
+A human-friendly USB device lister for Linux and macOS. Think of it as a modern
 alternative to `lsusb` — designed to show you what's actually plugged into your
 machine, not kernel internals.
 
@@ -45,9 +45,15 @@ Things you can see at a glance:
 
 ## How it works
 
-`uwhat` reads directly from Linux sysfs (`/sys/bus/usb/devices/`) — no libusb
-or root permissions required. Device and vendor names come from the system's USB
-ID database (`/usr/share/hwdata/usb.ids`).
+On **Linux**, `uwhat` reads directly from sysfs (`/sys/bus/usb/devices/`) — no
+libusb or root permissions required. Device and vendor names come from the
+system's USB ID database (`/usr/share/hwdata/usb.ids`).
+
+On **macOS**, `uwhat` reads the IOKit USB tree via `system_profiler`
+(`SPUSBHostDataType`). macOS already presents the merged physical topology, so
+the companion-bus merging described below is a Linux concern only; names come
+straight from the system. Per-interface drivers and full class-code detail are
+not exposed through this source, so those `-vv` fields are Linux-only.
 
 ### Companion bus merging
 
@@ -148,9 +154,13 @@ Download the statically linked binary from the
 
 ## Requirements
 
-- **Linux** — `uwhat` reads from sysfs, which is Linux-specific
-- `/usr/share/hwdata/usb.ids` — optional, for human-readable vendor/product
-  names (provided by `hwdata` or `usbutils` packages on most distributions)
+- **Linux** — reads from sysfs (`/sys/bus/usb/devices/`); no libusb or root needed
+- **macOS** — reads the IOKit USB tree via `system_profiler` (built in); no extra
+  dependencies. Per-interface driver names and full `-vv` class-code detail are
+  not available from this source and are therefore Linux-only
+- `/usr/share/hwdata/usb.ids` — optional on Linux, for human-readable vendor/product
+  names (provided by `hwdata` or `usbutils` packages on most distributions); on
+  macOS the names come from the system directly
 
 ## License
 

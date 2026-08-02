@@ -15,6 +15,15 @@ const USB_IDS_PATHS: &[&str] = &[
 ];
 
 impl UsbIds {
+    /// An empty database (no names). Used when no `usb.ids` is available and in
+    /// tests that need a hermetic lookup.
+    pub fn empty() -> Self {
+        Self {
+            vendors: HashMap::new(),
+            products: HashMap::new(),
+        }
+    }
+
     /// Load the USB ID database from the system. Returns an empty database on failure.
     pub fn load() -> Self {
         for path in USB_IDS_PATHS {
@@ -24,10 +33,7 @@ impl UsbIds {
                 return Self::parse(&content);
             }
         }
-        Self {
-            vendors: HashMap::new(),
-            products: HashMap::new(),
-        }
+        Self::empty()
     }
 
     fn parse(content: &str) -> Self {

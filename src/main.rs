@@ -1,9 +1,13 @@
-#[cfg(not(target_os = "linux"))]
-compile_error!("uwhat requires Linux (sysfs)");
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+compile_error!("uwhat supports only Linux (sysfs) and macOS (IOKit)");
 
+mod backend;
 mod device;
 mod display;
 mod json;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "linux")]
 mod sysfs;
 mod topology;
 mod usb_class;
@@ -87,7 +91,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let usb_ids = usb_ids::UsbIds::load();
-    let sysfs::Scan { mut devices, peers } = sysfs::scan_devices(&usb_ids)?;
+    let device::Scan { mut devices, peers } = backend::scan(&usb_ids)?;
 
     let device_filter = cli.device;
 
