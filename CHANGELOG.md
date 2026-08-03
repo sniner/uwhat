@@ -2,7 +2,7 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.3.0] - 2026-08-03
 
 ### Added
 
@@ -10,8 +10,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `system_profiler SPUSBHostDataType`; the default tree view, name/ID filtering and `--json` all
   work as on Linux. Per-interface driver annotations (`[usbhid]`) and the full `-vv` class-code
   detail are Linux-only, since macOS does not expose that data through this source
-- **Release binaries** for macOS (universal, Apple Silicon and Intel) and for `aarch64` Linux,
-  alongside the existing `x86_64` Linux build
+- **Release binaries** for macOS (Apple Silicon) and for `aarch64` Linux, alongside the
+  existing `x86_64` Linux build
 - **`num_interfaces`** in `--json`, the interface count from the device descriptor
 
 ### Changed
