@@ -149,6 +149,12 @@ the platform cannot see. On macOS that applies to `class`, `class_name`,
 
 ## Installation
 
+### From crates.io
+
+```
+cargo install uwhat
+```
+
 ### From source
 
 ```
