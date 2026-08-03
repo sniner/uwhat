@@ -328,8 +328,11 @@ fn synth_parent_port(bus: u8, chain: &[u8]) -> Option<String> {
 }
 
 fn parse_hex_u16(v: Option<&Value>) -> Option<u16> {
-    let s = v?.as_str()?.trim();
-    let hex = s.strip_prefix("0x").unwrap_or(s);
+    // Only the first whitespace-delimited token: `system_profiler` sometimes
+    // appends the resolved name, e.g. "0x05ac (Apple Inc.)". Without this the
+    // whole device would silently drop out (see `build_device`).
+    let token = v?.as_str()?.split_whitespace().next()?;
+    let hex = token.strip_prefix("0x").unwrap_or(token);
     u16::from_str_radix(hex, 16).ok()
 }
 
@@ -458,6 +461,16 @@ mod tests {
             Some("1-2.3-port4")
         );
         assert_eq!(synth_parent_port(1, &[]), None);
+    }
+
+    #[test]
+    fn parse_hex_u16_tolerates_a_trailing_name() {
+        let hex = |s: &str| parse_hex_u16(Some(&Value::String(s.to_string())));
+        assert_eq!(hex("0x05ac"), Some(0x05ac));
+        assert_eq!(hex("05e3"), Some(0x05e3));
+        // system_profiler sometimes appends the resolved vendor name
+        assert_eq!(hex("0x05ac (Apple Inc.)"), Some(0x05ac));
+        assert_eq!(hex("garbage"), None);
     }
 
     #[test]
