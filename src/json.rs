@@ -61,7 +61,22 @@ fn physical_device_to_json(pdev: &PhysicalDevice) -> Value {
 }
 
 fn device_to_json(dev: &UsbDevice) -> Value {
-    let drivers = dev.unique_drivers();
+    // Fields the backend cannot supply are emitted as `null`, not as a zero or
+    // an empty list — a consumer must be able to tell "this device has no
+    // interfaces" from "this platform does not report interfaces".
+    let class = dev
+        .device_class
+        .as_ref()
+        .map(|c| format!("{:02x}:{:02x}:{:02x}", c.class, c.subclass, c.protocol));
+    let class_name = dev
+        .device_class
+        .as_ref()
+        .map(|c| usb_class::class_name(c.class));
+    let interfaces = dev
+        .interfaces
+        .as_ref()
+        .map(|list| list.iter().map(interface_to_json).collect::<Vec<_>>());
+    let drivers = dev.interfaces.as_ref().map(|_| dev.unique_drivers());
 
     json!({
         "bus": dev.bus,
@@ -76,12 +91,13 @@ fn device_to_json(dev: &UsbDevice) -> Value {
         "speed_mbps": dev.speed,
         "speed": usb_class::speed_short(dev.speed),
         "usb_version": dev.usb_version,
-        "class": format!("{:02x}:{:02x}:{:02x}", dev.device_class, dev.device_subclass, dev.device_protocol),
-        "class_name": usb_class::class_name(dev.device_class),
+        "class": class,
+        "class_name": class_name,
         "max_power": dev.max_power,
         "removable": dev.removable,
         "max_children": dev.max_children,
-        "interfaces": dev.interfaces.iter().map(interface_to_json).collect::<Vec<_>>(),
+        "num_interfaces": dev.num_interfaces,
+        "interfaces": interfaces,
         "drivers": drivers,
     })
 }

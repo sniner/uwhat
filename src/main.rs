@@ -5,9 +5,15 @@ mod backend;
 mod device;
 mod display;
 mod json;
-#[cfg(target_os = "macos")]
+// Both backends are pure mapping logic on top of a platform-specific data
+// source, so they are compiled under `test` on either OS. That way `cargo test`
+// exercises the macOS location-ID/port-name mapping on Linux and the sysfs
+// parsing on macOS — the parts most likely to silently drift apart.
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod macos;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", test))]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod sysfs;
 mod topology;
 mod usb_class;

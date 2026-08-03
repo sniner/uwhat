@@ -57,9 +57,13 @@ pub fn interface_class_name(class: u8, subclass: u8, protocol: u8) -> &'static s
     }
 }
 
-/// Human-readable speed label.
+/// Human-readable speed label. A speed of zero means the backend could not
+/// determine it (macOS omits the link speed for some devices) — that is
+/// reported as unknown rather than as the slowest USB speed.
 pub fn speed_label(speed: f64) -> &'static str {
-    if speed <= 1.5 {
+    if speed <= 0.0 {
+        "unknown speed"
+    } else if speed <= 1.5 {
         "Low Speed (1.5 Mbps)"
     } else if speed <= 12.0 {
         "Full Speed (12 Mbps)"
@@ -74,9 +78,11 @@ pub fn speed_label(speed: f64) -> &'static str {
     }
 }
 
-/// Short speed label for compact display.
+/// Short speed label for compact display. Zero means unknown, see [`speed_label`].
 pub fn speed_short(speed: f64) -> &'static str {
-    if speed <= 1.5 {
+    if speed <= 0.0 {
+        "unknown"
+    } else if speed <= 1.5 {
         "1.5 Mbps"
     } else if speed <= 12.0 {
         "12 Mbps"
@@ -88,5 +94,19 @@ pub fn speed_short(speed: f64) -> &'static str {
         "10 Gbps"
     } else {
         "20 Gbps"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unknown_speed_is_not_reported_as_low_speed() {
+        assert_eq!(speed_short(0.0), "unknown");
+        assert_eq!(speed_label(0.0), "unknown speed");
+        // The slowest real USB speed still reports as such
+        assert_eq!(speed_short(1.5), "1.5 Mbps");
+        assert_eq!(speed_label(1.5), "Low Speed (1.5 Mbps)");
     }
 }

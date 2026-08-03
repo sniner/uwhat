@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::device::UsbDevice;
+use crate::device::{UsbDevice, port_owner};
 
 /// A physical USB controller (one or more companion buses).
 pub struct PhysicalController<'a> {
@@ -49,12 +49,33 @@ pub fn build_physical_topology<'a>(
     devices: &'a [UsbDevice],
     peers: &HashMap<String, String>,
 ) -> Vec<PhysicalController<'a>> {
-    // Devices attached to each hub instance: owner sysfs name -> children
+    // Devices attached to each hub instance: owner node key -> children
+    let known: HashSet<&str> = devices.iter().map(|d| d.node_key.as_str()).collect();
+    // Root hub per bus, to re-home devices whose parent hub is missing
+    let root_of_bus: HashMap<u8, &str> = devices
+        .iter()
+        .filter(|d| d.is_root_hub())
+        .map(|d| (d.bus, d.node_key.as_str()))
+        .collect();
+
     let mut children_by_owner: HashMap<&str, Vec<&UsbDevice>> = HashMap::new();
     for dev in devices {
-        if let Some(owner) = dev.parent_port.as_deref().and_then(port_owner) {
-            children_by_owner.entry(owner).or_default().push(dev);
-        }
+        let Some(owner) = dev.parent_port.as_deref().and_then(port_owner) else {
+            continue;
+        };
+        // A parent that is not in the device list means the backend dropped it
+        // (unreadable attributes, an undecodable location ID). Hanging the
+        // orphan off its bus's root hub keeps it visible; letting it reference
+        // a non-existent hub would silently remove it and its whole subtree
+        // from the tree, while `--list` still showed it.
+        let owner = if known.contains(owner) {
+            owner
+        } else if let Some(root) = root_of_bus.get(&dev.bus) {
+            root
+        } else {
+            continue;
+        };
+        children_by_owner.entry(owner).or_default().push(dev);
     }
 
     let controller_groups = group_root_hubs(devices, peers);
@@ -66,7 +87,7 @@ pub fn build_physical_topology<'a>(
             let max_speed = roots.iter().map(|r| r.speed).fold(0.0_f64, f64::max);
             let instances: ParentInstances = roots
                 .iter()
-                .map(|r| (r.sysfs_name.as_str(), r.speed))
+                .map(|r| (r.node_key.as_str(), r.speed))
                 .collect();
             let children = build_children(&instances, &children_by_owner, peers);
 
@@ -95,7 +116,7 @@ fn group_root_hubs<'a>(
     let index_of: HashMap<&str, usize> = roots
         .iter()
         .enumerate()
-        .map(|(i, r)| (r.sysfs_name.as_str(), i))
+        .map(|(i, r)| (r.node_key.as_str(), i))
         .collect();
 
     let mut uf = UnionFind::new(roots.len());
@@ -186,12 +207,17 @@ fn build_children<'a>(
             let child_instances: ParentInstances = slot
                 .devices
                 .iter()
-                .map(|d| (d.sysfs_name.as_str(), d.speed))
+                .map(|d| (d.node_key.as_str(), d.speed))
                 .collect();
             let children = build_children(&child_instances, children_by_owner, peers);
 
-            let speed_limited =
-                device.speed < slot.max_speed && slot.max_speed > 480.0 && device.speed <= 480.0;
+            // Only claim throttling where the backend actually knows how the
+            // port is wired — otherwise a USB 2.0-only header on a SuperSpeed
+            // controller would be reported as limited (see `port_capability_known`).
+            let speed_limited = device.port_capability_known
+                && device.speed < slot.max_speed
+                && slot.max_speed > 480.0
+                && device.speed <= 480.0;
 
             PhysicalDevice {
                 device,
@@ -204,11 +230,6 @@ fn build_children<'a>(
 
     result.sort_by_key(|pd| pd.device.port_number().unwrap_or(0));
     result
-}
-
-/// The hub instance a port belongs to: "2-3-port1" -> "2-3", "usb1-port6" -> "usb1".
-fn port_owner(port: &str) -> Option<&str> {
-    port.rsplit_once("-port").map(|(owner, _)| owner)
 }
 
 struct UnionFind {
@@ -244,7 +265,7 @@ mod tests {
     use super::*;
 
     fn dev(
-        sysfs_name: &str,
+        node_key: &str,
         bus: u8,
         devpath: &str,
         speed: f64,
@@ -252,7 +273,7 @@ mod tests {
         pci_slot: Option<&str>,
     ) -> UsbDevice {
         UsbDevice {
-            sysfs_name: sysfs_name.to_string(),
+            node_key: node_key.to_string(),
             bus,
             devnum: 1,
             devpath: devpath.to_string(),
@@ -264,17 +285,16 @@ mod tests {
             product_name: None,
             serial: None,
             speed,
-            usb_version: "2.00".to_string(),
-            device_class: 0,
-            device_subclass: 0,
-            device_protocol: 0,
+            usb_version: Some("2.00".to_string()),
+            device_class: None,
             max_power: None,
-            num_interfaces: 0,
+            num_interfaces: None,
             removable: None,
             max_children: None,
-            interfaces: Vec::new(),
+            interfaces: None,
             pci_slot: pci_slot.map(str::to_string),
             parent_port: parent_port.map(str::to_string),
+            port_capability_known: true,
         }
     }
 
@@ -315,6 +335,21 @@ mod tests {
     }
 
     #[test]
+    fn port_with_unknown_capability_is_never_speed_limited() {
+        // Backends without port wiring information (macOS) must not claim a
+        // device is throttled just because the controller is faster.
+        let mut slow = dev("1-1", 1, "1", 480.0, Some("usb1-port1"), None);
+        slow.port_capability_known = false;
+        let devices = vec![dev("usb1", 1, "0", 10000.0, None, None), slow];
+
+        let controllers = build_physical_topology(&devices, &HashMap::new());
+        let child = &controllers[0].children[0];
+        assert!(!child.speed_limited);
+        // The port capability is still reported, only the verdict is withheld
+        assert!((child.port_max_speed - 10000.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
     fn devices_on_unpeered_ports_with_same_number_do_not_merge() {
         // Regression: the old devpath heuristic collapsed devices at the
         // same port number across companion buses, hiding one of them.
@@ -351,13 +386,13 @@ mod tests {
         assert_eq!(controllers[0].children.len(), 1);
 
         let hub = &controllers[0].children[0];
-        assert_eq!(hub.device.sysfs_name, "2-3");
+        assert_eq!(hub.device.node_key, "2-3");
         assert!(!hub.speed_limited);
 
         // The child hangs off the merged hub and its port supports 5 Gbps
         assert_eq!(hub.children.len(), 1);
         let child = &hub.children[0];
-        assert_eq!(child.device.sysfs_name, "1-3.1");
+        assert_eq!(child.device.node_key, "1-3.1");
         assert!(child.speed_limited);
         assert!((child.port_max_speed - 5000.0).abs() < f64::EPSILON);
     }
@@ -374,6 +409,26 @@ mod tests {
         assert_eq!(controllers.len(), 1);
         assert!(controllers[0].pci_slot.is_none());
         assert_eq!(controllers[0].children.len(), 1);
+    }
+
+    #[test]
+    fn device_whose_parent_hub_is_missing_stays_visible() {
+        // Regression: if a backend drops a hub (unreadable attributes), its
+        // children referenced a node that no longer existed and vanished from
+        // the tree entirely, while `--list` still showed them.
+        let devices = vec![
+            dev("usb1", 1, "0", 5000.0, None, None),
+            // "1-2" (the hub) is deliberately absent
+            dev("1-2.1", 1, "2.1", 480.0, Some("1-2-port1"), None),
+        ];
+        let controllers = build_physical_topology(&devices, &HashMap::new());
+        assert_eq!(controllers.len(), 1);
+        assert_eq!(controllers[0].children.len(), 1);
+
+        let orphan = &controllers[0].children[0];
+        assert_eq!(orphan.device.node_key, "1-2.1");
+        // Its real port capability is unknown, so no throttling verdict
+        assert!(!orphan.speed_limited);
     }
 
     #[test]
