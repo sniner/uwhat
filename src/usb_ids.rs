@@ -8,6 +8,10 @@ pub struct UsbIds {
     products: HashMap<(u16, u16), String>,
 }
 
+/// Where a system-installed `usb.ids` may live — the Linux FHS locations.
+/// macOS ships no such database and none is searched for: names there come from
+/// the devices themselves, and a device that reports none shows its bare ID
+/// rather than making the output depend on an optional third-party package.
 const USB_IDS_PATHS: &[&str] = &[
     "/usr/share/hwdata/usb.ids",
     "/usr/share/misc/usb.ids",

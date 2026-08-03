@@ -59,13 +59,14 @@ fn print_device_line(out: &mut impl Write, dev: &UsbDevice, verbose: u8, theme: 
     let id = format!("{:04x}:{:04x}", dev.vendor_id, dev.product_id);
     let name = dev.display_name();
 
-    // Device class label (only if meaningful at device level)
-    let class_label = if dev.device_class != 0x00 && dev.device_class != 0x09 {
-        Some(usb_class::class_name(dev.device_class))
-    } else if dev.device_class == 0x09 {
-        Some("Hub")
-    } else {
-        effective_class_label(dev)
+    // Device class label (only if meaningful at device level). Backends that do
+    // not report class codes leave `device_class` as None; the interface-derived
+    // fallback then has nothing to work with either, so there is no label.
+    let class_label = match dev.device_class.as_ref().map(|c| c.class) {
+        Some(0x09) => Some("Hub"),
+        Some(class) if class != 0x00 => Some(usb_class::class_name(class)),
+        Some(_) => effective_class_label(dev),
+        None => None,
     };
 
     write!(
@@ -93,19 +94,22 @@ fn print_device_line(out: &mut impl Write, dev: &UsbDevice, verbose: u8, theme: 
 }
 
 fn print_verbose_1(out: &mut impl Write, dev: &UsbDevice, theme: &Theme) {
+    // Only the speed is always known; the descriptor version and the power
+    // draw are omitted rather than shown as a placeholder where the backend
+    // does not report them.
     let speed = usb_class::speed_label(dev.speed);
-    writeln!(
-        out,
-        "  {}, USB {}, {}",
-        speed.style(theme.speed),
-        dev.usb_version,
-        dev.max_power.as_deref().unwrap_or("?"),
-    )
-    .ok();
+    write!(out, "  {}", speed.style(theme.speed)).ok();
+    if let Some(ref version) = dev.usb_version {
+        write!(out, ", USB {version}").ok();
+    }
+    if let Some(ref power) = dev.max_power {
+        write!(out, ", {power}").ok();
+    }
+    writeln!(out).ok();
 
-    if !dev.interfaces.is_empty() {
+    if !dev.interface_list().is_empty() {
         let ifaces: Vec<String> = dev
-            .interfaces
+            .interface_list()
             .iter()
             .map(|i| {
                 let class = usb_class::interface_class_name(i.class, i.subclass, i.protocol);
@@ -120,16 +124,21 @@ fn print_verbose_1(out: &mut impl Write, dev: &UsbDevice, theme: &Theme) {
 }
 
 fn print_verbose_2(out: &mut impl Write, dev: &UsbDevice) {
-    writeln!(
-        out,
-        "  Class: {:02x}:{:02x}:{:02x} ({}), {} interface(s)",
-        dev.device_class,
-        dev.device_subclass,
-        dev.device_protocol,
-        usb_class::class_name(dev.device_class),
-        dev.num_interfaces,
-    )
-    .ok();
+    if let Some(ref class) = dev.device_class {
+        write!(
+            out,
+            "  Class: {:02x}:{:02x}:{:02x} ({})",
+            class.class,
+            class.subclass,
+            class.protocol,
+            usb_class::class_name(class.class),
+        )
+        .ok();
+        if let Some(count) = dev.num_interfaces {
+            write!(out, ", {count} interface(s)").ok();
+        }
+        writeln!(out).ok();
+    }
     if let Some(ref serial) = dev.serial {
         writeln!(out, "  Serial: {serial}").ok();
     }
@@ -139,7 +148,7 @@ fn print_verbose_2(out: &mut impl Write, dev: &UsbDevice) {
     if let Some(children) = dev.max_children {
         writeln!(out, "  Hub ports: {children}").ok();
     }
-    for iface in &dev.interfaces {
+    for iface in dev.interface_list() {
         writeln!(
             out,
             "  Interface {}: class {:02x}:{:02x}:{:02x}, {} endpoint(s), driver: {}",
@@ -156,16 +165,17 @@ fn print_verbose_2(out: &mut impl Write, dev: &UsbDevice) {
 
 /// Derive a class label from interfaces when device class is 0x00.
 fn effective_class_label(dev: &UsbDevice) -> Option<&'static str> {
-    if dev.interfaces.is_empty() {
+    let interfaces = dev.interface_list();
+    let [first, rest @ ..] = interfaces else {
         return None;
-    }
+    };
     // If all interfaces share the same class, use that
-    let first = dev.interfaces[0].class;
-    if dev.interfaces.iter().all(|i| i.class == first) && first != 0x00 {
+    if first.class != 0x00 && rest.iter().all(|i| i.class == first.class) {
         // Use the most specific label from the first interface
-        let i = &dev.interfaces[0];
         return Some(usb_class::interface_class_name(
-            i.class, i.subclass, i.protocol,
+            first.class,
+            first.subclass,
+            first.protocol,
         ));
     }
     None
@@ -267,7 +277,9 @@ fn print_physical_children(
         }
 
         if verbose >= 1 {
-            write!(out, ", USB {}", dev.usb_version).ok();
+            if let Some(ref version) = dev.usb_version {
+                write!(out, ", USB {version}").ok();
+            }
             if let Some(ref power) = dev.max_power {
                 write!(out, ", {power}").ok();
             }
@@ -281,7 +293,7 @@ fn print_physical_children(
             } else {
                 format!("{child_prefix}│   ")
             };
-            for iface in &dev.interfaces {
+            for iface in dev.interface_list() {
                 let class =
                     usb_class::interface_class_name(iface.class, iface.subclass, iface.protocol);
                 writeln!(

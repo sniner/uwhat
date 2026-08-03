@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::device::{Scan, UsbDevice, UsbInterface};
+use crate::device::{ClassCode, Scan, UsbDevice, UsbInterface, port_name, sanitize};
 use crate::usb_ids::UsbIds;
 
 const SYSFS_USB_DEVICES: &str = "/sys/bus/usb/devices";
@@ -81,19 +81,19 @@ fn scan_port_peers(device_path: &Path, peers: &mut HashMap<String, String>) {
 /// The sysfs name of the port a device hangs off: "2-3.1" sits on port 1
 /// of hub "2-3" ("2-3-port1"), top-level "2-4" on port 4 of the root hub
 /// ("usb2-port4"). Root hubs have no parent port.
-fn parent_port_name(sysfs_name: &str, bus: u8, devpath: &str) -> Option<String> {
+fn parent_port_name(node_key: &str, bus: u8, devpath: &str) -> Option<String> {
     if devpath == "0" {
         return None;
     }
-    if let Some((parent, port)) = sysfs_name.rsplit_once('.') {
-        Some(format!("{parent}-port{port}"))
+    if let Some((parent, port)) = node_key.rsplit_once('.') {
+        Some(port_name(parent, port))
     } else {
-        let (_, port) = sysfs_name.split_once('-')?;
-        Some(format!("usb{bus}-port{port}"))
+        let (_, port) = node_key.split_once('-')?;
+        Some(port_name(&format!("usb{bus}"), port))
     }
 }
 
-fn read_device(path: &Path, sysfs_name: &str, usb_ids: &UsbIds) -> Option<UsbDevice> {
+fn read_device(path: &Path, node_key: &str, usb_ids: &UsbIds) -> Option<UsbDevice> {
     let vendor_id = read_hex(path, "idVendor")?;
     let product_id = read_hex(path, "idProduct")?;
     let bus = read_decimal::<u8>(path, "busnum")?;
@@ -101,10 +101,12 @@ fn read_device(path: &Path, sysfs_name: &str, usb_ids: &UsbIds) -> Option<UsbDev
     let devpath = read_attr(path, "devpath")?;
     let speed: f64 = read_attr(path, "speed")?.parse().ok()?;
     let usb_version = read_attr(path, "version")?;
-    let device_class = read_hex_u8(path, "bDeviceClass")?;
-    let device_subclass = read_hex_u8(path, "bDeviceSubClass")?;
-    let device_protocol = read_hex_u8(path, "bDeviceProtocol")?;
-    let num_interfaces = read_decimal::<u8>(path, "bNumInterfaces").unwrap_or(0);
+    let device_class = ClassCode {
+        class: read_hex_u8(path, "bDeviceClass")?,
+        subclass: read_hex_u8(path, "bDeviceSubClass")?,
+        protocol: read_hex_u8(path, "bDeviceProtocol")?,
+    };
+    let num_interfaces = read_decimal::<u8>(path, "bNumInterfaces");
 
     let manufacturer = read_attr(path, "manufacturer");
     let product = read_attr(path, "product");
@@ -120,11 +122,11 @@ fn read_device(path: &Path, sysfs_name: &str, usb_ids: &UsbIds) -> Option<UsbDev
         .product_name(vendor_id, product_id)
         .map(std::string::ToString::to_string);
 
-    let interfaces = read_interfaces(path, sysfs_name);
-    let parent_port = parent_port_name(sysfs_name, bus, &devpath);
+    let interfaces = read_interfaces(path, node_key);
+    let parent_port = parent_port_name(node_key, bus, &devpath);
 
     Some(UsbDevice {
-        sysfs_name: sysfs_name.to_string(),
+        node_key: node_key.to_string(),
         bus,
         devnum,
         devpath,
@@ -136,17 +138,18 @@ fn read_device(path: &Path, sysfs_name: &str, usb_ids: &UsbIds) -> Option<UsbDev
         product_name,
         serial,
         speed,
-        usb_version,
-        device_class,
-        device_subclass,
-        device_protocol,
+        usb_version: Some(usb_version),
+        device_class: Some(device_class),
         max_power,
         num_interfaces,
         removable,
         max_children,
-        interfaces,
+        interfaces: Some(interfaces),
         pci_slot: None,
         parent_port,
+        // sysfs exposes port peer links, so `topology.rs` knows exactly how
+        // each port is wired.
+        port_capability_known: true,
     })
 }
 
@@ -215,18 +218,6 @@ fn read_attr(path: &Path, name: &str) -> Option<String> {
     }
 }
 
-/// Strip control characters and surrounding whitespace. Descriptor strings
-/// come from the device itself; a malicious one could otherwise inject
-/// terminal escape sequences into our output.
-fn sanitize(content: &str) -> String {
-    content
-        .chars()
-        .filter(|c| !c.is_control())
-        .collect::<String>()
-        .trim()
-        .to_string()
-}
-
 fn read_hex(path: &Path, name: &str) -> Option<u16> {
     let s = read_attr(path, name)?;
     u16::from_str_radix(&s, 16).ok()
@@ -245,16 +236,6 @@ fn read_decimal<T: std::str::FromStr>(path: &Path, name: &str) -> Option<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn sanitize_strips_escape_sequences() {
-        assert_eq!(
-            sanitize("Evil\x1b]0;pwned\x07Device\n"),
-            "Evil]0;pwnedDevice"
-        );
-        assert_eq!(sanitize("  USB Receiver \n"), "USB Receiver");
-        assert_eq!(sanitize("\x1b[2J\x1b[H"), "[2J[H");
-    }
 
     #[test]
     fn parent_port_name_variants() {

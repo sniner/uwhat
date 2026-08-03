@@ -7,10 +7,46 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **macOS support**: `uwhat` now runs on macOS in addition to Linux. It reads the USB tree from
-  `system_profiler SPUSBHostDataType`; the default tree view, speed warnings, name/ID filtering
-  and `--json` all work as on Linux. Per-interface driver annotations (`[usbhid]`) and the full
-  `-vv` class-code detail are Linux-only, since macOS does not expose that data through this
-  source
+  `system_profiler SPUSBHostDataType`; the default tree view, name/ID filtering and `--json` all
+  work as on Linux. Per-interface driver annotations (`[usbhid]`) and the full `-vv` class-code
+  detail are Linux-only, since macOS does not expose that data through this source
+- **Release binaries** for macOS (universal, Apple Silicon and Intel) and for `aarch64` Linux,
+  alongside the existing `x86_64` Linux build
+- **`num_interfaces`** in `--json`, the interface count from the device descriptor
+
+### Changed
+
+- **Device names** no longer repeat the manufacturer when the product name already contains it:
+  `SMSL SMSL USB AUDIO` is now `SMSL USB AUDIO`, `MI Mi Wireless Mouse` is `Mi Wireless Mouse`.
+  A manufacturer that is genuinely absent from the product name is still prefixed as before
+- **Speed warnings** (`(of 10 Gbps)`) are now only shown where the port's wiring is actually
+  known. On Linux that is every port, via the sysfs port peer links. macOS does not report it,
+  so the hint appears for removable ports but is withheld for built-in devices, which sit on
+  USB 2.0-only internal headers often enough that the warning would mostly be a false alarm
+- **Unknown link speeds** are reported as `unknown` instead of being rounded down to
+  `1.5 Mbps`. Affects macOS, where `system_profiler` omits the link speed for some devices
+- **`--json` reports unavailable data as `null`**, not as a zero or an empty list. `class`,
+  `class_name`, `usb_version`, `num_interfaces`, `interfaces` and `drivers` are `null` on macOS,
+  where the underlying source does not expose them — previously they were indistinguishable
+  from a device that genuinely has no interfaces or no class code. Unchanged on Linux
+- **`-v`/`-vv` omit fields the platform does not report** instead of printing `?` or zeros
+
+### Fixed
+
+- **Device names** from a device's own descriptors are now stripped of terminal control
+  characters on macOS as well, not just on Linux. A malicious USB device could otherwise have
+  injected escape sequences into `uwhat`'s output
+- **`--bus` on macOS** now refers to a stable bus number. Previously the synthetic numbering
+  covered only buses that had devices on them, so plugging a device into a so-far empty bus
+  renumbered the others
+- **Unexpected `system_profiler` output** is now reported as an error instead of being shown as
+  an empty device list, which was indistinguishable from a machine with nothing plugged in
+- **Devices whose parent hub could not be read** are shown under their controller instead of
+  disappearing from the tree along with everything below them; they were only visible in
+  `--list` before
+- **`USB 3.1 Gen 1` and `USB 3.2 Gen 1x2` buses on macOS** are no longer reported at the speed of
+  the fastest generation of that version (10 Gbps for both), which also produced spurious speed
+  warnings for devices on them
 
 ## [0.2.0] - 2026-06-12
 

@@ -53,7 +53,10 @@ On **macOS**, `uwhat` reads the IOKit USB tree via `system_profiler`
 (`SPUSBHostDataType`). macOS already presents the merged physical topology, so
 the companion-bus merging described below is a Linux concern only; names come
 straight from the system. Per-interface drivers and full class-code detail are
-not exposed through this source, so those `-vv` fields are Linux-only.
+not exposed through this source, so those `-vv` fields are Linux-only. The same
+goes for port wiring: macOS does not say whether a port is USB 2.0-only, so the
+`(of 10 Gbps)` throttling hint is shown for removable ports but withheld for
+built-in devices, where it would usually be a false alarm.
 
 ### Companion bus merging
 
@@ -139,6 +142,11 @@ $ uwhat --json | jq '.[].devices[] | select(.speed_limited) | {name, speed, port
 }
 ```
 
+Fields the platform does not report are `null`, never `0` or `[]` — so a device
+that genuinely has no interfaces stays distinguishable from one whose interfaces
+the platform cannot see. On macOS that applies to `class`, `class_name`,
+`usb_version`, `num_interfaces`, `interfaces` and `drivers`.
+
 ## Installation
 
 ### From source
@@ -149,8 +157,11 @@ cargo install --path .
 
 ### Pre-built binary
 
-Download the statically linked binary from the
-[releases page](https://github.com/sniner/uwhat/releases).
+Download from the [releases page](https://github.com/sniner/uwhat/releases):
+
+- `uwhat-vX.Y.Z-x86_64-linux-musl` / `-aarch64-linux-musl` — statically linked,
+  no runtime dependencies
+- `uwhat-vX.Y.Z-macos-universal` — universal binary (Apple Silicon and Intel)
 
 ## Requirements
 
@@ -159,8 +170,9 @@ Download the statically linked binary from the
   dependencies. Per-interface driver names and full `-vv` class-code detail are
   not available from this source and are therefore Linux-only
 - `/usr/share/hwdata/usb.ids` — optional on Linux, for human-readable vendor/product
-  names (provided by `hwdata` or `usbutils` packages on most distributions); on
-  macOS the names come from the system directly
+  names when a device reports none of its own (provided by `hwdata` or `usbutils`
+  packages on most distributions). Not used on macOS: names come from the devices
+  themselves, and a device that reports none is shown by its ID
 
 ## License
 
