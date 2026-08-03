@@ -161,7 +161,7 @@ Download from the [releases page](https://github.com/sniner/uwhat/releases):
 
 - `uwhat-vX.Y.Z-x86_64-linux-musl` / `-aarch64-linux-musl` — statically linked,
   no runtime dependencies
-- `uwhat-vX.Y.Z-macos-universal` — universal binary (Apple Silicon and Intel)
+- `uwhat-vX.Y.Z-aarch64-macos` — macOS on Apple Silicon (Intel: build from source)
 
 ## Requirements
 

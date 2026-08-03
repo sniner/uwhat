@@ -110,10 +110,10 @@ jobs:
           retention-days: 7
 
   build-macos:
-    # Universal binary: both Apple targets built on one arm64 runner, merged
-    # with lipo. Kept out of the Linux matrix — the steps (two targets, lipo,
-    # no static-linkage check) share almost nothing with the musl builds.
-    name: Build macOS universal
+    # Apple Silicon only. Intel Macs are not a shipped target — an Intel user
+    # can still `cargo install`. Kept out of the Linux matrix: no musl or
+    # static-linkage step applies here.
+    name: Build macOS (Apple Silicon)
     needs: verify-version
     if: ${{ always() && (needs.verify-version.result == 'success' || needs.verify-version.result == 'skipped') }}
     runs-on: macos-latest
@@ -123,44 +123,29 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin, x86_64-apple-darwin
+          targets: aarch64-apple-darwin
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: macos-universal
+          key: aarch64-apple-darwin
 
-      - name: Build uwhat (both architectures)
-        run: |
-          cargo build --release --locked --target aarch64-apple-darwin
-          cargo build --release --locked --target x86_64-apple-darwin
+      - name: Build uwhat
+        run: cargo build --release --locked --target aarch64-apple-darwin
 
-      - name: Merge into a universal binary
+      - name: Stage binary with versioned name
         run: |
           mkdir -p dist
-          lipo -create \
-            target/aarch64-apple-darwin/release/uwhat \
-            target/x86_64-apple-darwin/release/uwhat \
-            -output "dist/uwhat-${GITHUB_REF_NAME}-macos-universal"
-          strip "dist/uwhat-${GITHUB_REF_NAME}-macos-universal"
-
-      - name: Verify universal binary
-        run: |
-          BIN="dist/uwhat-${GITHUB_REF_NAME}-macos-universal"
-          lipo -archs "$BIN"
-          for arch in x86_64 arm64; do
-            if ! lipo -archs "$BIN" | grep -qw "$arch"; then
-              echo "ERROR: $arch slice missing from universal binary"
-              exit 1
-            fi
-          done
-          # Smoke test: the arm64 slice runs on this runner.
+          BIN="dist/uwhat-${GITHUB_REF_NAME}-aarch64-macos"
+          cp target/aarch64-apple-darwin/release/uwhat "$BIN"
+          strip "$BIN"
+          # Smoke test: macos-latest is arm64, so it runs the binary directly.
           "$BIN" --version
-          echo "OK: $(du -h "$BIN" | cut -f1) universal binary"
+          echo "OK: $(du -h "$BIN" | cut -f1) arm64 binary"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: uwhat-macos-universal
+          name: uwhat-aarch64-macos
           path: dist/uwhat-*
           if-no-files-found: error
           retention-days: 7
